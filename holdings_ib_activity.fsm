@@ -1,0 +1,19 @@
+
+Value InvType
+Value Currency
+Value Symbol
+Value Quantity
+Value CostPrice
+
+Start
+  ^Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code -> Data
+
+#Open Positions,Data,Summary,Warrants,SGD,8L9W,18660,1,0.000000015,0.000274,0.215,4011.9,4011.899726
+
+Data
+  ^Open Positions,Data,Summary,${InvType},${Currency},${Symbol},${Quantity},.*,${CostPrice},${CostBasis},${CurrPrice},${CurrValue},${Gain} -> Next.Record
+  ^Open Positions,Total,
+  ^Open Positions,Header,
+  #Error out if its an Open Position line but we don't understand it
+  ^Open Positions, -> Error
+

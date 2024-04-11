@@ -1,0 +1,36 @@
+# Not hardcoding individual options, so the number of options can grow without having to
+# update the template
+Value Options ([\w,]+)
+Value Format (Format)
+Value Name (\S+)
+Value FormatName (\S+)
+Value Regex (\(.*\))
+Value Valuu (Value)
+Value Filldown Ruul (\S+)
+Value Match (.*)
+Value LineAction (\w+)
+Value RecordAction (\w+)
+Value NextRuleName (\w+)
+
+Start
+  ^\s*#
+  ^${Format} ${Name} ${Regex} -> Next.Record
+  ^${Format} -> Error
+  ^${Valuu} ${Options} ${Name} ${Regex} -> Next.Record
+  ^${Valuu} ${Options} ${Name} ${FormatName} -> Next.Record
+  ^${Valuu} ${Name} (${Regex}) -> Next.Record
+  ^${Valuu} ${Name} ${FormatName} -> Next.Record
+  ^${Valuu} ${Name} -> Next.Record
+  ^${Valuu} -> Error
+  ^${Ruul}$$ -> Ruul
+
+Ruul
+  ^\s*#
+  ^\s\s+\^${Match} [-][>] ${LineAction}\.${RecordAction} ${NextRuleName} -> Next.Record
+  ^\s\s+\^${Match} [-][>] ${LineAction}\.${RecordAction} -> Next.Record
+  ^\s\s+\^${Match} [-][>] ${LineAction} ${NextRuleName} -> Next.Record
+  ^\s\s+\^${Match} [-][>] ${NextRuleName} -> Next.Record
+  ^\s\s+\^${Match} -> Next.Record
+  ^$$ -> Start
+  ^.* -> Error 
+ 
