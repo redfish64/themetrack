@@ -1,19 +1,33 @@
+Import template.fsm
 
-Value InvType
-Value Currency
-Value Symbol
-Value Quantity
-Value CostPrice
+Value Filldown Account
 
 Start
+  ^Account Information,Header,Field Name,Field Value,,,,,,,,,,,,,
+  ^Account Information,Data,Account,${Account},,,,,,,,,,,,,
+  OpenPos
+
+OpenPos
   ^Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code -> Data
+  OpenPosData
 
-#Open Positions,Data,Summary,Warrants,SGD,8L9W,18660,1,0.000000015,0.000274,0.215,4011.9,4011.899726
-
-Data
-  ^Open Positions,Data,Summary,${InvType},${Currency},${Symbol},${Quantity},.*,${CostPrice},${CostBasis},${CurrPrice},${CurrValue},${Gain} -> Next.Record
+OpenPosData
+  ^Open Positions,Data,Summary,${AssetCategory},${Currency},${Symbol},${Quantity},.*,${CostPrice},${CostBasis},${CurrPrice},${CurrValue},${Gain} -> Next.Record
   ^Open Positions,Total,
   ^Open Positions,Header,
   #Error out if its an Open Position line but we don't understand it
   ^Open Positions, -> Error
+  FinInfoWarrantsHeader
 
+FinInfoWarrantsHeader
+  ^Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Listing Exch,Multiplier,Expiry,Strike,Issuer,Code,
+  Fin
+
+FinInfoWarrantsData  
+  ^Financial Instrument Information,Data,${AssetCategory},${Symbol},${Description},${Conid},${SecurityID},${ListingExchange},${Multiplier},${Expiry},${Strike},${Issuer} -> Next.Record
+  FinInfoStocksHeader
+
+FinInfoStocls
+  ^Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Listing Exch,Multiplier,Expiry,Strike,Issuer,Code,
+  ^Financial Instrument Information,Data,${AssetCategory},${Symbol},${Description},${Conid},${SecurityID},${ListingExchange},${Multiplier},${Expiry},${Strike},${Issuer} -> Next.Record
+  ^ -> FinInfoStocks

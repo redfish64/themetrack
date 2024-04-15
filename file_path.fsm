@@ -1,0 +1,7 @@
+Value DirDate Date
+Value FileDate Date
+Value FileCategory (\w+)
+
+Start
+ ^ FilePath (?:${DirDate}).*/(?:${FileDate}_)?${FileCategory}_${FileDate} -> Next.Record
+

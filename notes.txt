@@ -1,0 +1,20 @@
+directory: may contain a date, so maybe "[date]_<dir_name> "2024_04_11_...."
+file: [date (optional)]_<holdings|pick|notes>_<file_type1>_<file_type2...>.csv
+<file_type1>, <file_type2>, etc. can be anything and along with <holdings|rec|notes> is matched against template name. 
+so for example, you could have "holdings_ib_activity". A template that starts with the same file types will
+be looked for. So if there is a file template "holdings_ib.fsm", it would be chosen to parse the file data.
+Or if you have pick_capex_big5, and there is a template "pick_capex.fsm" it would be used.
+If categories overlap, we'll have an option to decide how to print the result:
+  1. Print total amount duplicated for all categories
+  2. Split amount across categories
+
+We don't want to reimplement a spreadsheet, so we're not going to do any summary tables. We'll just do matching.
+
+
+We should be loose as far as currency and numbers. IOW, accept "-$1,000,000", "$(1,000,000)", "($1,000,000)","(1,000,000)","(1000000)", etc.
+Otherwise its needlessly complex to make a data file
+
+In csvfsm we should convert values directly to their native types. So that, if we have Value BuyDate Date, then the data within
+the result is a date type.
+
+But with stock, that's the tricky one, because we need to join based on something, and stock is not always named the same thing.

@@ -31,7 +31,7 @@ import argparse
 import re
 import textfsm
 import csv
-import os
+import util
 from enum import Enum
 
 FSM_TEMPLATE_NAME="fsm.tfsm"
@@ -51,12 +51,11 @@ DEFAULT_VALUE_REGEX='.*'
 DEFAULT_VALUE_OPTIONS=[]
 START_RULE='Start'
 
-def get_code_file_path(file):
-    # Get the directory of the current script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+fsm_template = util.get_code_file_path(FSM_TEMPLATE_NAME)
 
-    # Build the path to the file
-    return os.path.join(script_dir, file)
+# Open the template file, and initialise a new TextFSM object with it.
+FSMTSM = textfsm.TextFSM(open(fsm_template))
+
 
 def add_uniq_to_dict(d, key, value):
     if key in d:
@@ -266,15 +265,10 @@ class CsvTemplate():
         self.rules = rules
 
 def read_template(template_filename):
-    fsm_template = get_code_file_path(FSM_TEMPLATE_NAME)
-
-    # Open the template file, and initialise a new TextFSM object with it.
-    fsm = textfsm.TextFSM(open(fsm_template))
-
     with open(template_filename) as file:
         input_data = file.read()
     
-    fsm_results = fsm.ParseTextToDicts(input_data)
+    fsm_results = FSMTSM.ParseTextToDicts(input_data)
 
     formats = {}
     value_regexs = {}
