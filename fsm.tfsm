@@ -10,7 +10,7 @@ Value Filldown Ruul (\S+)
 Value Match (.*)
 Value LineAction (\w+)
 Value RecordAction (\w+)
-Value NextRuleName (\w+)
+Value NextRuleNames ((?:\w+,)\w+)
 
 Start
   ^\s*#
@@ -27,10 +27,10 @@ Start
 
 Ruul
   ^\s*#
-  ^\s\s+\^${Match} [-][>] ${LineAction}\.${RecordAction} ${NextRuleName} -> Next.Record
+  ^\s\s+\^${Match} [-][>] ${LineAction}\.${RecordAction} ${NextRuleNames} -> Next.Record
   ^\s\s+\^${Match} [-][>] ${LineAction}\.${RecordAction} -> Next.Record
-  ^\s\s+\^${Match} [-][>] ${LineAction} ${NextRuleName} -> Next.Record
-  ^\s\s+\^${Match} [-][>] ${NextRuleName} -> Next.Record
+  ^\s\s+\^${Match} [-][>] ${LineAction} ${NextRuleNames} -> Next.Record
+  ^\s\s+\^${Match} [-][>] ${NextRuleNames} -> Next.Record
   ^\s\s+\^${Match} -> Next.Record
   ^$$ -> Start
   ^.* -> Error 

@@ -3,31 +3,34 @@ Import template.fsm
 Value Filldown Account
 
 Start
+  ^ -> RereadLine Account,OpenPos,FinInfoWarrants,FinInfoStocks
+
+Account
   ^Account Information,Header,Field Name,Field Value,,,,,,,,,,,,,
   ^Account Information,Data,Account,${Account},,,,,,,,,,,,,
-  OpenPos
 
 OpenPos
-  ^Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code -> Data
-  OpenPosData
-
+  ^Open Positions,Header,DataDiscriminator,Asset Category,Currency,Symbol,Quantity,Mult,Cost Price,Cost Basis,Close Price,Value,Unrealized P/L,Code -> OpenPosData
+  
 OpenPosData
   ^Open Positions,Data,Summary,${AssetCategory},${Currency},${Symbol},${Quantity},.*,${CostPrice},${CostBasis},${CurrPrice},${CurrValue},${Gain} -> Next.Record
-  ^Open Positions,Total,
-  ^Open Positions,Header,
-  #Error out if its an Open Position line but we don't understand it
-  ^Open Positions, -> Error
-  FinInfoWarrantsHeader
+  ^Open Positions,Total
+  ^Open Positions,Header
+  ^ -> End
 
-FinInfoWarrantsHeader
-  ^Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Listing Exch,Multiplier,Expiry,Strike,Issuer,Code,
-  Fin
+FinInfoWarrants
+  ^Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Listing Exch,Multiplier,Expiry,Strike,Issuer,Code, -> FinInfoWarrantsData
+  # No other rule means skip all other lines besides this header
 
 FinInfoWarrantsData  
   ^Financial Instrument Information,Data,${AssetCategory},${Symbol},${Description},${Conid},${SecurityID},${ListingExchange},${Multiplier},${Expiry},${Strike},${Issuer} -> Next.Record
-  FinInfoStocksHeader
+  ^ -> RereadLine End
 
-FinInfoStocls
-  ^Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Listing Exch,Multiplier,Expiry,Strike,Issuer,Code,
-  ^Financial Instrument Information,Data,${AssetCategory},${Symbol},${Description},${Conid},${SecurityID},${ListingExchange},${Multiplier},${Expiry},${Strike},${Issuer} -> Next.Record
-  ^ -> FinInfoStocks
+
+FinInfoStocks
+  ^Financial Instrument Information,Header,Asset Category,Symbol,Description,Conid,Security ID,Listing Exch,Multiplier,Type,Code, -> FinInfoStocksData
+
+FinInfoStocksData
+  ^Financial Instrument Information,Data,${AssetCategory},${Symbol},${Description},${Conid},${SecurityID},${ListingExchange},${Multiplier},${Type},${Code} -> Next.Record
+  ^Financial Instrument Information -> E
+
