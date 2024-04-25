@@ -4,26 +4,45 @@ import argparse
 import re
 import sys
 import util
-import csvfsm
 import pdb
+import capex_scraper
+import ib_parser
+import pandas as pd
+from ftypes import Brokerage, PickType
 
+BROKERAGE_COLUMN = "Brokerage"
 
+def get_brokerage(holdings_row : pd.Series):
+    """Matches a row to a Brokerage enum
+    Returns:
+        Pick | None 
+    """
+    return Brokerage.get(holdings_row[BROKERAGE_COLUMN],None)
+    
+def get_pick_type(pick_row : pd.Series):
+    """Matches a row to a Pick enum
+    Returns:
+        Pick | None 
+    """
+    CAPEX_MATCH = {
+        "Total Portfolio" : PickType.CapexTotalPortfolio,
+        "Skeleton Portfolio" : PickType.CapexSkeletonPortfolio,
+        "Divi Portfolio" : PickType.CapexDiviPortfolio,
+        "BIG 5 MEMBERS AREA" : PickType.CapexBig5
+    }
 
-def warning(str):
-    print(str, file=sys.stderr)
+    if(capex_scraper.CAPEX_NAME_COL in pick_row):
+        return CAPEX_MATCH.get(pick_row[capex_scraper.CAPEX_NAME_COL],None)
+    
+    util.error(f"Can't determine type of pick for row {pick_row}")
 
-
-def error(str):
-    print(str, file=sys.stderr)
-    raise Exception('Error',str)
-
-def get_files_with_ext(directory):
+def get_files_with_ext(directory, ext):
     """Returns all files ending in given extension"""
     files = []
     
     for item in os.listdir(directory):
         item_path = os.path.join(directory, item)
-        if os.path.isfile(item_path) and item_path.lower().endswith(".csv"):
+        if os.path.isfile(item_path) and item_path.lower().endswith(ext):
             files.append(item_path)
 
     return files
@@ -31,6 +50,40 @@ def get_files_with_ext(directory):
 def get_template_path(template_name):
     util.get_code_file_path(template_name)
 
+def is_capex_json(filename : str):
+    return re.match(r"^capex.*\.json$",filename.lower()) is not None
+
+def is_ib_holding_activity_csv(filename : str):
+    return re.match(r"^holdings_ib_activity.*\.csv$",filename.lower()) is not None
+
+def get_exchange_from_ib()
+
+def join_holdings_and_picks(holdings : pd.DataFrame, picks : pd.DataFrame):
+    """Does a join in order to try and match picks to holdings, 
+       returning a new dataframe containing indexes of each join. Multiple or zero matches are possible."""
+    joins = pd.DataFrame({'Holdings_Index','Picks_Index'})
+
+    # we do a line by line cartesian product O(m*n) join here because there just aren't a lot of rows and its more
+    # flexible than trying to create columns and matching normally 
+    for hi,h in holdings:
+        brokerage = get_brokerage(h)
+        match brokerage:
+            case Brokerage.InteractiveBrokers:
+                
+                hsym = h['Symbol']
+                hexch = get_exchange_from_ib(h['Listing Exch'])
+            case _:
+                util.error(f"Internal error, unknown brokerage for row {h}")
+
+        for pi,p in picks:
+            pick_type = get_pick_type(p)
+
+            match pick_type:
+                case PickType.CapexTotalPortfolio:
+                    psym = p['Ticker']
+                    pexch = get_exchange_from_capex(p['Exchange'])
+                case _:
+                    util.error(f"Internal error, unknown pick type for row {p}")
 
 parser = argparse.ArgumentParser(
     usage="%(prog)s [options] [directory of financial files]...",
@@ -42,25 +95,35 @@ parser.add_argument("finance_dir", help="directory containing financial files")
 
 config = parser.parse_args()
 
-csv_file_paths = get_files_with_ext(config.finance_dir)
+picks_df = pd.DataFrame()
+holdings_df = pd.DataFrame()
 
-FILE_PATH_FSM = "file_path.fsm"
+for item in os.listdir(config.finance_dir):
+    item_path = os.path.join(config.finance_dir, item)
+    if os.path.isfile(item_path):
+        if is_capex_json(item):
+            table_json_data = open(item_path,"rb").read()
+            df = capex_scraper.convert_capex_portfolio_data_to_pandas(table_json_data)
+            picks_df = pd.concat([picks_df,df],ignore_index=True)
+        elif is_ib_holding_activity_csv(item):
+            ib_df = ib_parser.parse_holding_activity(item_path)
+            ib_df[Brokerage.InteractiveBrokers.name] = Brokerage.InteractiveBrokers
 
-file_path_template = csvfsm.read_template(get_template_path(FILE_PATH_FSM))
+            holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
+        else:
+            util.warn(f"skipping file {item_path}, don't know how to handle")
+    else:
+        util.warn(f"skipping dir {item_path}")
 
-books = core.new_books()
+res = join_holdings_with_picks(holdings_df,picks_df)
 
-for csv_fp in csv_file_paths:
-    fp_data = csvfsm.parse_data(file_path_template,csv_fp)
- 
-    template_filename = get_template_filename_from_fp_data(fp_data)
-    file_data_template = csvfsm.read_template(get_template_path(template_filename))
+# def print_csv_array(l):
+#     for i in l:
+#         print(i.to_csv())
+#         print("---------------------------")
 
-    file_data = csvfsm.parse_datafile(file_data_template,csv_fp)
-
-    interpret_data(books,fp_data,file_data)
-
-printer.print_books(books)
+# print_csv_array(picks_df_list)
+# print_csv_array(holdings_df_list)
 
 
 # def verify_fields(fields, *expected_fields):
