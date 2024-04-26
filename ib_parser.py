@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     res = parse_holding_activity(conf.file)
 
-    print(res)
+    print(res.to_csv())
 
 
 
