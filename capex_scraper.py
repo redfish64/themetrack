@@ -1,4 +1,5 @@
 from math import inf
+from weakref import ref
 import requests
 from bs4 import BeautifulSoup
 import re
@@ -11,6 +12,7 @@ import util
 import pandas as pd
 import datetime
 import scraper_util
+import ftypes
 
 CAPEX_NAME_COL = 'capex_name'
 REFRESHED_DATE_COL = 'refreshed_date'
@@ -67,19 +69,24 @@ def read_capex_portfolio_html(opener):
 
         return(capex_html,infogram_html_list,table_data)
 
+CAPEX_FILENAME_TO_RECORD_TYPE= {
+    "Closed Positions" : ftypes.RecordType.CapexClosed,
+    "BIG 5 MEMBERS AREA" : ftypes.RecordType.CapexBig5,
+    "Total Portfolio" : ftypes.RecordType.CapexTotalPortfolio,
+    "Skeleton Portfolio" : ftypes.RecordType.CapexSkeletonPortfolio,
+    "Divi Portfolio" : ftypes.RecordType.CapexDiviPortfolio
+}
 
 def convert_capex_portfolio_data_to_pandas(td_json):
     td = json.loads(td_json.decode())
     #convert data to pandas
     table = td['data'][0]
     headers = table[0]
-    fn = td['fileName']
-    refreshed_date = datetime.datetime.fromtimestamp(int(td['refreshed'])/1000)
 
     out_table = {}
 
     def add_cell(ri,c,ch):
-        """_summary_
+        """adds a new cell. creates row if necessary
 
         Args:
             ri : row index
@@ -101,8 +108,6 @@ def convert_capex_portfolio_data_to_pandas(td_json):
         out_table[ch] = column
 
     for ri,r in enumerate(table[1:]):
-        add_cell(ri,fn,CAPEX_NAME_COL)
-        add_cell(ri,refreshed_date,REFRESHED_DATE_COL)
         for c,ch in zip(r,headers):
             if(isinstance(c,dict)):
                 if(c['type'] != 'link'):
@@ -118,7 +123,17 @@ def convert_capex_portfolio_data_to_pandas(td_json):
     for col in out_table.values():
         col += [None] * (len(table)-1-(len(col)))
 
-    return pd.DataFrame(out_table)
+    res =  pd.DataFrame(out_table)
+
+    fn = td['fileName']
+    rt = CAPEX_FILENAME_TO_RECORD_TYPE[fn]
+    refreshed_date = datetime.datetime.fromtimestamp(int(td['refreshed'])/1000)
+
+    res[CAPEX_NAME_COL] = fn
+    res[REFRESHED_DATE_COL]= refreshed_date
+    res[ftypes.RecordType.__name__]= rt
+
+    return res
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

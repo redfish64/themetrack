@@ -6,6 +6,7 @@ import sys
 import util
 import capex_scraper
 import ib_parser
+import override_parser
 import pandas as pd
 from ftypes import Brokerage, PickType
 import matcher
@@ -29,7 +30,10 @@ def is_capex_json(filename : str):
     return re.match(r"^capex.*\.json$",filename.lower()) is not None
 
 def is_ib_holding_activity_csv(filename : str):
-    return re.match(r"^holdings_ib_activity.*\.csv$",filename.lower()) is not None
+    return re.match(r"^holdings_ib_activity.*\.(?:csv|xlsx)$",filename.lower()) is not None
+
+def is_overrides_csv(filename : str):
+    return re.match(r"^overrides.*\.(?:csv|xlsx)$",filename.lower()) is not None
 
 def join_holdings_and_picks(holdings : pd.DataFrame, picks : pd.DataFrame):
     """Does a join in order to try and match picks to holdings, 
@@ -56,7 +60,9 @@ config = parser.parse_args()
 picks_df = pd.DataFrame()
 holdings_df = pd.DataFrame()
 
-for item in os.listdir(config.finance_dir):
+overrides = []
+
+for item in os.listdir(config.finance_dir).sort():
     item_path = os.path.join(config.finance_dir, item)
     if os.path.isfile(item_path):
         if is_capex_json(item):
@@ -65,13 +71,18 @@ for item in os.listdir(config.finance_dir):
             picks_df = pd.concat([picks_df,df],ignore_index=True)
         elif is_ib_holding_activity_csv(item):
             ib_df = ib_parser.parse_holding_activity(item_path)
-            ib_df[Brokerage.InteractiveBrokers.name] = Brokerage.InteractiveBrokers
 
             holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
+        elif is_overrides_csv(item):
+            ov = override_parser.parse_overrides(item_path)
+            overrides += ov
         else:
             util.warn(f"skipping file {item_path}, don't know how to handle")
     else:
         util.warn(f"skipping dir {item_path}")
+
+for df in holdings_df+picks_df:
+    override_parser.run_overrides(overrides,df)
 
 res = join_holdings_and_picks(holdings_df,picks_df)
 

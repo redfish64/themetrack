@@ -3,6 +3,7 @@ import csv
 from enum import Enum, auto
 from util import error,warn,csv_assert,csv_error,csv_warning,ErrorType
 import pandas as pd
+import ftypes
 
 class Table():
     def __init__(self,name,fields) -> None:
@@ -107,7 +108,9 @@ def parse_holding_activity(file):
 
     #join open positions and ffi so we get more information on each stock owned
     res = pd.merge(op, fii, on=['Asset Category','Symbol'], how='inner',validate='1:1')
- 
+
+    res[ftypes.RecordType.__name__] = ftypes.Brokerage.InteractiveBrokers
+
     return res
 
 if __name__ == '__main__':

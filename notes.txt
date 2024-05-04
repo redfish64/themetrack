@@ -5,8 +5,6 @@ We may in the future allow api driven access to data, and this could be saved to
 
 Each parser will determine the names, and how to interpret each field
 
-There will also be a user editable config file that specified mappings between stocks and picks and maybe other things
-
 
 We will end up with a few classes:
 Holding - a position that is held by the account
@@ -14,3 +12,26 @@ Pick - a pick of a particular stock
 
 browser cookies can be grabbed using this project, I guess:
 https://github.com/borisbabic/browser_cookie3
+
+There will also be a user editable config file that specified mappings between stocks and picks and maybe other things.
+Here is an example:
+
+FileType	Match		Replacement	
+CapexBig5	Market	NYSEAMERICAN	Market	NYSE
+CapexBig5	Market	Foobar	Symbol	Nerf
+	Symbol	Jerf		
+CapexBig5	Market	US	Market	NYSE,AMEX,NASDAQ
+
+There are groups, so that whenever there is a non empty FileType, then a new record is created
+Each record will match specified columns, and then if they match, the replacement is run
+
+Replacement records will run in order. User replacements will be forst.
+specifies "Market:NYSEAMERICAN,Symbol:Foo" -> Symbol:Foo2 then it would match even though
+there is a Market:NYSEAMERICAN -> Market:NYSE
+
+Any column can be matched and any column can be set. This way a Theme can be manually set
+for specific symbols, "Symbol:XZY" -> "Theme:SuperBestTheme"
+
+Matched records will be recorded in a "Override Notes" column for each row.
+
+We can even do re, by prefixing with "re:" if necessary.
