@@ -8,8 +8,7 @@ import capex_scraper
 import ib_parser
 import override_parser
 import pandas as pd
-from ftypes import Brokerage, PickType
-import matcher
+from functools import cmp_to_key
 
 
 def get_files_with_ext(directory, ext):
@@ -32,20 +31,38 @@ def is_capex_json(filename : str):
 def is_ib_holding_activity_csv(filename : str):
     return re.match(r"^holdings_ib_activity.*\.(?:csv|xlsx)$",filename.lower()) is not None
 
-def is_overrides_csv(filename : str):
+def is_overrides_file(filename : str):
     return re.match(r"^overrides.*\.(?:csv|xlsx)$",filename.lower()) is not None
 
-def join_holdings_and_picks(holdings : pd.DataFrame, picks : pd.DataFrame):
-    """Does a join in order to try and match picks to holdings, 
-       returning a new dataframe containing indexes of each join. Multiple or zero matches are possible."""
-    joins = []
+def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame):
 
-    # we do a line by line cartesian product O(m*n) join here because there just aren't a lot of rows and its more
-    # flexible than trying to create columns and matching normally 
-    for hi,h in holdings:
-        for pi,p in picks:
-            if(matcher.match_holding_to_pick(h,p)):
-                joins.append(hi,pi)
+    # Set indices to preserve original row numbers
+    holdings_df['holdings_index'] = holdings_df.index
+    picks_df['picks_index'] = picks_df.index
+
+    res_df_list = []
+    #PERF this is very slow, but we can speed it up later, by matching multiple holdings at a time 
+    # that have the same MatchColumns value
+    for hi,h in holdings_df.iterrows():
+        #this should never be None because it was checked when the file was parsed
+        h_mc,p_mc = override_parser.parse_match_columns(h['MatchColumns'])
+
+        #match against the picks
+                
+        # Construct the boolean mask dynamically
+        mask = pd.Series(True, index=picks_df.index)  # Start with all True
+        for column in h_mc:
+            value = util.get_df_row_val(h,column) 
+            mask &= (picks_df[column] == value)  # Update mask to narrow down the rows
+
+        filtered_picks_df = picks_df[mask]
+
+        joined_df = filtered_picks_df.assign(**h)
+
+        res_df_list.append(joined_df)
+
+    res = pd.concat(res_df_list, ignore_index=True)
+    return res
 
 parser = argparse.ArgumentParser(
     usage="%(prog)s [options] [directory of financial files]...",
@@ -62,7 +79,10 @@ holdings_df = pd.DataFrame()
 
 overrides = []
 
-for item in os.listdir(config.finance_dir).sort():
+data_dir_files = os.listdir(config.finance_dir)
+data_dir_files.sort()
+
+for item in data_dir_files:
     item_path = os.path.join(config.finance_dir, item)
     if os.path.isfile(item_path):
         if is_capex_json(item):
@@ -73,27 +93,65 @@ for item in os.listdir(config.finance_dir).sort():
             ib_df = ib_parser.parse_holding_activity(item_path)
 
             holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
-        elif is_overrides_csv(item):
-            ov = override_parser.parse_overrides(item_path)
+        elif is_overrides_file(item):
+            ov = override_parser.parse_override_file(item_path)
             overrides += ov
         else:
             util.warn(f"skipping file {item_path}, don't know how to handle")
     else:
         util.warn(f"skipping dir {item_path}")
 
-for df in holdings_df+picks_df:
-    override_parser.run_overrides(overrides,df)
+override_parser.run_overrides(overrides,picks_df)
+override_parser.run_overrides(overrides,holdings_df)
 
-res = join_holdings_and_picks(holdings_df,picks_df)
+def put_match_columns_first(df):
+    # Extract columns starting with 'Match'
+    match_columns = [col for col in df.columns if col.startswith('Match')]
 
-# def print_csv_array(l):
-#     for i in l:
-#         print(i.to_csv())
-#         print("---------------------------")
+    # Reorder DataFrame
+    df = df[match_columns + [col for col in df.columns if col not in match_columns]]
+    return df
 
-# print_csv_array(picks_df_list)
-# print_csv_array(holdings_df_list)
+picks_df = put_match_columns_first(picks_df)
+holdings_df = put_match_columns_first(holdings_df)
 
+
+join_res = join_holdings_and_picks(holdings_df,picks_df)
+
+#PERF: this code is probably inefficient, not a pandas expert
+res = []
+
+def sort_rows_by_priority(rows : list):
+    rows.sort()
+
+for hi in holdings_df.index:
+    joined_rows = join_res[join_res['holdings_index'] == hi]
+    num_joined_rows = len(joined_rows)
+    if(num_joined_rows == 0):
+        res.append(holdings_df.loc[hi].to_dict())
+        res[-1]['JoinResult'] = 'None'
+    elif(num_joined_rows == 1):
+        res.append(joined_rows.iloc[0].to_dict())
+        res[-1]['JoinResult'] = '1:1'
+    elif(num_joined_rows > 1):
+        sorted_join_rows = joined_rows.sort_values(by=['ThemePriority','MatchMarket','MatchSymbol'])
+
+        res.append(sorted_join_rows.iloc[0].to_dict())
+        desc = ",".join([r['ThemeDesc'] for r in sorted_join_rows])
+
+        res[-1]['JoinResult'] = 'Many'
+        res[-1]['JoinAll'] = desc
+
+
+res_pd = pd.DataFrame(res)
+
+print(res_pd.to_csv())
+print("-"*40)
+print(holdings_df.to_csv())
+print("-"*40)
+print(picks_df.to_csv())
+
+print("TODO 2: For each pick, if there are multiple matching holdings, complain somehow possibly")
 
 # def verify_fields(fields, *expected_fields):
 #     if fields == expected_fields:

@@ -1,6 +1,8 @@
 """Parses an override excel or csv file
 """
 from calendar import c
+import math
+from numpy import NaN
 import openpyxl as op
 import sys
 
@@ -24,20 +26,18 @@ def row_matches(r1,r2):
 
         return False
     return True
-    
+
+
+
 class MatchCondition:
     def __init__(self,name,val_str) -> None:
         self.name = name
         self.val_str = val_str
 
-    def match(self,row):
-        try:
-            v = row[self.name]
-        except KeyError:
-            return (False,None)
+    def matches(self,row):
+        v = util.get_df_row_val(row,self.name)
         
-        if(v == self.val_str):
-            return (True,{})
+        return(v == self.val_str,{})
         
 class ReMatchCondition:
     def __init__(self,name,var_names,val_re) -> None:
@@ -45,24 +45,30 @@ class ReMatchCondition:
         self.var_names = var_names
         self.val_re = val_re
 
-    def match(self,row):
-        try:
-            v = row[self.name]
-        except KeyError:
+    def matches(self,row):
+        v = util.get_df_row_val(row,self.name)
+
+        if(v is None):
             return (False,None)
         
         m = re.match(self.val_re,v)
         if(m):
             var_values = m.groups()
             return (True,dict(zip(self.var_names,var_values)))
+        
         return (False,None)
 
 
 def create_match_condition(name,val_str):
-    m = re.match(r"^\$\w+(?:,\$\w+))*=(.*)$",val_str)
+    m = re.match(r"^(\$\w+(?:,\$\w+)*)=(.*)$",val_str)
     if(m): #if a regular expression match, ex: $mkt,$sym=(.*):(.*)
         vars_str = m.group(1)
-        regex = re.compile(m.group(2))
+
+        regex_str = m.group(2)
+        if(not regex_str.endswith('$')):
+            regex_str += "$"
+
+        regex = re.compile(regex_str)
 
         # Split the string by commas to get individual variables
         vars_list = vars_str.split(',')
@@ -75,8 +81,7 @@ def create_match_condition(name,val_str):
         return MatchCondition(name,val_str)
 
 class OverrideRule:
-    def __init__(self, record_type) -> None:
-        self.record_type = record_type
+    def __init__(self) -> None:
         self.match_conditions = []
         self.replacements = []
 
@@ -84,7 +89,7 @@ class OverrideRule:
         """
         adds a condition for the rule to match before it is executed
         """
-        self.match_conditions.append((match_name,match_value))
+        self.match_conditions.append(create_match_condition(match_name,match_value))
 
     def add_replacement(self, repl_name, repl_value):
         """
@@ -100,38 +105,69 @@ class OverrideRule:
 
 
     def matches(self,df,index):
+        row = df.iloc[index]
+
+        var_subs = {}
         for mc in self.match_conditions:
-            if(not mc.matches(df.iloc[index])):
-                return False
+            (matches, match_var_subs) = mc.matches(row)
+            if(not matches):
+                return (False, {})
+            
+            var_subs.update(match_var_subs)
         
-        return True
+        return (True, var_subs)
     
-    def apply(self,df,index):
+    def apply(self,var_subs,df,index):
+        def replace_var_sub(match):
+            var_name = match.group(1)  # Extract the variable name from the match
+            return var_subs.get(var_name, match.group(0))  # Return the value or the original string
+
         for r_name,r_value in self.replacements:
-            df.at[index,r_name] = r_value
+            updated_val = re.sub(r'\$\{(\w+)\}', replace_var_sub, r_value)
+            df.at[index,r_name] = updated_val
+
+def parse_match_columns(s : str):
+    m = re.match(r'(\w+(?:,\w+))\s*=\s*(\w+(?:,\w+))$',s)
+    if(m is None):
+        return None
+    holding_columns_str,pick_columns_str = m.groups()
+
+    return holding_columns_str.split(','),pick_columns_str.split(',')
 
 def parse_override_file(fp : str):
-    fi = enumerate(util.read_standardized_csv(fp,min_row_len=5))
+    fi = enumerate(util.read_standardized_csv(fp,min_row_len=4))
 
-    _,header = next(fi)
-    if(not row_matches(['RecordType', 'Match', '', 'Replacement'],header[0:4])):
-        util.csv_error(header,0,None,"Header must match \"FileType,Match,'',Replacement\"")
+    #we allow the user to put some preamble stuff containing whatever they want before the main match/replacement table
+    found_header = False
+    for ri,row in fi:
+        if(row_matches(['Match', '', 'Replacement'],row[0:3])):
+            found_header = True
+            break
+    
+    if(not found_header):
+        util.csv_error('',0,None,"Header must match \"Match,'',Replacement\"")
 
     rules = []
     current_rule = None
     for ri,row in fi:
-        if(row[0] == ''):
-            if(current_rule is None):
-                util.csv_error(row,0,0,"Must specify a record type")            
-        else :        
-            record_type = util.csv_convert_to_enum(ftypes.RecordType,row,0,ri)
-            current_rule = OverrideRule(record_type)
+        #empty row indicates a new rule
+        if(row == ['']*4):
+            current_rule = None
+
+        if(current_rule is None):
+            current_rule = OverrideRule()
             rules.append(current_rule)
         
-        match_name = row[1]
-        match_value = row[2]
-        repl_name = row[3]
-        repl_value = row[4]
+        match_name,match_value,repl_name,repl_value = row[0:4]
+
+        #when a rule always matches, we allow the user to put a '*' to make it more humanly readable  
+        if(match_name == '*'):
+            match_name = ''
+
+        if(repl_name == ftypes.assert_column_name("MatchColumns")):
+            if(parse_match_columns(repl_value) is None):
+                util.csv_error(row,ri,3,"MatchColumn values must be in the format "
+                               "'[holding_column1],[holding_column2],...=[pick_column1],[pick_column2]...', Ex. 'Region,Ticker=Region,Ticker'")
 
         if(match_name != ''):
             current_rule.add_match_condition(match_name, match_value)
@@ -145,8 +181,9 @@ def parse_override_file(fp : str):
 def run_overrides(rules : list[OverrideRule], df : pd.DataFrame):
     for index in df.index:
         for r in rules:
-            if(r.matches(df,index)):
-                r.apply(df,index)
+            (does_match,var_subs) = r.matches(df,index)
+            if(does_match):
+                r.apply(var_subs,df,index)
 
 
 if __name__ == '__main__':

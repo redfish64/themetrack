@@ -14,8 +14,6 @@ import datetime
 import scraper_util
 import ftypes
 
-CAPEX_NAME_COL = 'capex_name'
-REFRESHED_DATE_COL = 'refreshed_date'
 
 def get_dict_tree_value_by_path(tree, path):
     current = tree
@@ -69,13 +67,6 @@ def read_capex_portfolio_html(opener):
 
         return(capex_html,infogram_html_list,table_data)
 
-CAPEX_FILENAME_TO_RECORD_TYPE= {
-    "Closed Positions" : ftypes.RecordType.CapexClosed,
-    "BIG 5 MEMBERS AREA" : ftypes.RecordType.CapexBig5,
-    "Total Portfolio" : ftypes.RecordType.CapexTotalPortfolio,
-    "Skeleton Portfolio" : ftypes.RecordType.CapexSkeletonPortfolio,
-    "Divi Portfolio" : ftypes.RecordType.CapexDiviPortfolio
-}
 
 def convert_capex_portfolio_data_to_pandas(td_json):
     td = json.loads(td_json.decode())
@@ -126,12 +117,12 @@ def convert_capex_portfolio_data_to_pandas(td_json):
     res =  pd.DataFrame(out_table)
 
     fn = td['fileName']
-    rt = CAPEX_FILENAME_TO_RECORD_TYPE[fn]
+    capex_name = ftypes.CAPEX_FILENAME_TO_CAPEX_NAME[fn]
     refreshed_date = datetime.datetime.fromtimestamp(int(td['refreshed'])/1000)
 
-    res[CAPEX_NAME_COL] = fn
-    res[REFRESHED_DATE_COL]= refreshed_date
-    res[ftypes.RecordType.__name__]= rt
+    res[ftypes.assert_column_name("CapexName")] = fn
+    res[ftypes.assert_column_name("RefreshedDate")]= refreshed_date
+    res[ftypes.assert_column_name("CapexName")]= capex_name
 
     return res
 

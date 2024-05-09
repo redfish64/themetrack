@@ -2,7 +2,7 @@ import logging
 import os
 from enum import Enum, auto
 import openpyxl as op
-
+import pandas as pd
 
 def get_code_file_path(file):
     # Get the directory of the current script
@@ -51,7 +51,8 @@ def csv_cell_standardize(c : str):
     """
     if(c is None):
         return ''
-    return c.strip()
+    
+    return str(c).strip()
 
 def read_standardized_csv(fp : str,min_row_len=0,worksheet_number=0):
     """Regardless of whether an excel spreadsheet or a csv, reads it like a csv file.
@@ -107,5 +108,16 @@ def csv_convert_to_enum(enum_obj : Enum, row, col_index, row_index):
     try:
         return enum_obj[val]
     except KeyError:
-        csv_error(row,row_index,col_index,f"{val} not found in enum f{enum_obj.__name__}, values {", ".join([m.name for m in enum_obj])}")
+        csv_error(row,row_index,col_index,f'{val} not found in enum f{enum_obj.__name__}, values {", ".join([m.name for m in enum_obj])}')
         
+def get_df_row_val(row,name):
+    try:
+        v = row[name]
+    except KeyError:
+        return None
+    
+    if(pd.isna(v)):
+        v = None
+
+    return v
+
