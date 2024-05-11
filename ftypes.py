@@ -6,7 +6,7 @@ from enum import Enum, auto
 import re
 import util
 
-CAPEX_FILENAME_TO_CAPEX_NAME= {
+CAPEX_FILENAME_TO_PICK_TYPE= {
     "Closed Positions" : "CapexClosed",
     "BIG 5 MEMBERS AREA" : "CapexBig5",
     "Total Portfolio" : "CapexTotalPortfolio",
@@ -20,7 +20,8 @@ class Brokerage(Enum):
 #columns that are either read from or populated by the finance app
 SPECIAL_COLUMNS_TO_DESCRIPTION = {
     "Brokerage": f"brokerage security is held at, populated by finance app, one of {",".join(Brokerage._member_names_)}",
-    "PickType": "type of pick, capex big5, capex total portfolio, etc., populated by finance app",
+    "PickType": f"type of pick, capex big5, capex total portfolio, etc., one of "
+                f"{",".join(CAPEX_FILENAME_TO_PICK_TYPE.values())}, populated by finance app",
     "PickPriority": """
 ThemePriority is used when there are multiple matches 
 for a held security. The one with the lower ThemePriority 
@@ -35,12 +36,10 @@ The result of matching holdings to picks:
     Many - holding matches more than one pick
     None - holding matches no picks
 """,
-    "JoinManyDesc": "If a 'many' join, the contents of PickDesc for each of the join besides the first",
     "MatchColumns": """
 This field determines how the holdings and picks are joined. It is a comma separated list of holdings to a 
 comma separated list of picks, ex. "Region,Ticker=Region,Ticker"
 """,
-    "CapexName" : f'Name of capex portfolio, one of {",".join(CAPEX_FILENAME_TO_CAPEX_NAME.values())}',
     "CapexName" : 'fileName from capex json',
     "RefreshedDate" : 'refreshed field from capex json',
 }

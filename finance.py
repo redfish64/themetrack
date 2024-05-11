@@ -9,6 +9,7 @@ import ib_parser
 import override_parser
 import pandas as pd
 from functools import cmp_to_key
+import ftypes
 
 
 def get_files_with_ext(directory, ext):
@@ -134,21 +135,23 @@ for hi in holdings_df.index:
         res.append(joined_rows.iloc[0].to_dict())
         res[-1]['JoinResult'] = '1:1'
     elif(num_joined_rows > 1):
-        sorted_join_rows = joined_rows.sort_values(by=['ThemePriority','MatchMarket','MatchSymbol'])
+        sorted_join_rows = joined_rows.sort_values(by=[ftypes.assert_column_name('PickPriority')])
 
         res.append(sorted_join_rows.iloc[0].to_dict())
-        desc = ",".join([r['ThemeDesc'] for r in sorted_join_rows])
+        desc = ",".join([r[ftypes.assert_column_name('PickDesc')] for _,r in sorted_join_rows.iterrows()])
 
         res[-1]['JoinResult'] = 'Many'
         res[-1]['JoinAll'] = desc
+
+#put_columns_in_front()
 
 
 res_pd = pd.DataFrame(res)
 
 print(res_pd.to_csv())
 print("-"*40)
-print(holdings_df.to_csv())
-print("-"*40)
+# print(holdings_df.to_csv())
+# print("-"*40)
 print(picks_df.to_csv())
 
 print("TODO 2: For each pick, if there are multiple matching holdings, complain somehow possibly")

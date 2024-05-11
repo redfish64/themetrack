@@ -60,7 +60,7 @@ class ReMatchCondition:
 
 
 def create_match_condition(name,val_str):
-    m = re.match(r"^(\$\w+(?:,\$\w+)*)=(.*)$",val_str)
+    m = re.match(r"^(\$\w+(?:,\$\w+)*|\$)=(.*)$",val_str)
     if(m): #if a regular expression match, ex: $mkt,$sym=(.*):(.*)
         vars_str = m.group(1)
 
@@ -70,11 +70,15 @@ def create_match_condition(name,val_str):
 
         regex = re.compile(regex_str)
 
-        # Split the string by commas to get individual variables
-        vars_list = vars_str.split(',')
+        #special no variable regex: $=<regex>
+        if(vars_str == '$'):
+            vars_list = []
+        else:
+            # Split the string by commas to get individual variables
+            vars_list = vars_str.split(',')
 
-        # Remove the dollar sign from each variable
-        vars_list = [var.strip('$') for var in vars_list]
+            # Remove the dollar sign from each variable
+            vars_list = [var.strip('$') for var in vars_list]
 
         return ReMatchCondition(name,vars_list,regex)
     else:
