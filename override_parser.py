@@ -131,7 +131,7 @@ class OverrideRule:
             df.at[index,r_name] = updated_val
 
 def parse_match_columns(s : str):
-    m = re.match(r'(\w+(?:,\w+))\s*=\s*(\w+(?:,\w+))$',s)
+    m = re.match(r'([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))\s*=\s*([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))$',s)
     if(m is None):
         return None
     holding_columns_str,pick_columns_str = m.groups()
@@ -168,7 +168,7 @@ def parse_override_file(fp : str):
         if(match_name == '*'):
             match_name = ''
 
-        if(repl_name == ftypes.assert_column_name("MatchColumns")):
+        if(repl_name == ftypes.SpecialColumns.MatchColumns.get_col_name()):
             if(parse_match_columns(repl_value) is None):
                 util.csv_error(row,ri,3,"MatchColumn values must be in the format "
                                "'[holding_column1],[holding_column2],...=[pick_column1],[pick_column2]...', Ex. 'Region,Ticker=Region,Ticker'")
@@ -181,8 +181,18 @@ def parse_override_file(fp : str):
     return rules
 
 
-
 def run_overrides(rules : list[OverrideRule], df : pd.DataFrame):
+    #TODO 2 have two separate rules, internal and user.
+    #we run:
+    #  1. internal
+    #  2. user
+    #  3. internal (again)
+
+    #this is so that the user can come up with their own rules and not worry about their order
+    #For example, suppose the user wants to make a rule that sets the exchange to HK
+    #The main rules set the region based on the exchange. So in that case we'd have to run the
+    #user rules first. However, if they read a value, such as R:Ticker, then we have to
+    #run their rules after, since R:Ticker isn't populated until then.
     for index in df.index:
         for r in rules:
             (does_match,var_subs) = r.matches(df,index)

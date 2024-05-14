@@ -7,6 +7,7 @@ import util
 import capex_scraper
 import ib_parser
 import override_parser
+import schwab_parser
 import pandas as pd
 from functools import cmp_to_key
 import ftypes
@@ -32,6 +33,9 @@ def is_capex_json(filename : str):
 def is_ib_holding_activity_csv(filename : str):
     return re.match(r"^holdings_ib_activity.*\.(?:csv|xlsx)$",filename.lower()) is not None
 
+def is_schwab_csv(filename : str):
+    return re.match(r"^holdings_schwab.*\.(?:csv|xlsx)$",filename.lower()) is not None
+
 def is_overrides_file(filename : str):
     return re.match(r"^overrides.*\.(?:csv|xlsx)$",filename.lower()) is not None
 
@@ -42,11 +46,17 @@ def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame)
     picks_df['picks_index'] = picks_df.index
 
     res_df_list = []
+
+    all_match_columns = {}
+
     #PERF this is very slow, but we can speed it up later, by matching multiple holdings at a time 
     # that have the same MatchColumns value
     for hi,h in holdings_df.iterrows():
         #this should never be None because it was checked when the file was parsed
-        h_mc,p_mc = override_parser.parse_match_columns(h['MatchColumns'])
+        h_mc,p_mc = override_parser.parse_match_columns(h[ftypes.SpecialColumns.MatchColumns.get_col_name()])
+
+        for mc in h_mc + p_mc:
+            all_match_columns[mc] = True   
 
         #match against the picks
                 
@@ -63,7 +73,7 @@ def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame)
         res_df_list.append(joined_df)
 
     res = pd.concat(res_df_list, ignore_index=True)
-    return res
+    return res,all_match_columns.keys()
 
 parser = argparse.ArgumentParser(
     usage="%(prog)s [options] [directory of financial files]...",
@@ -94,6 +104,10 @@ for item in data_dir_files:
             ib_df = ib_parser.parse_holding_activity(item_path)
 
             holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
+        elif is_schwab_csv(item):
+            ib_df = schwab_parser.parse_file(item_path)
+
+            holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
         elif is_overrides_file(item):
             ov = override_parser.parse_override_file(item_path)
             overrides += ov
@@ -105,48 +119,56 @@ for item in data_dir_files:
 override_parser.run_overrides(overrides,picks_df)
 override_parser.run_overrides(overrides,holdings_df)
 
-def put_match_columns_first(df):
-    # Extract columns starting with 'Match'
-    match_columns = [col for col in df.columns if col.startswith('Match')]
 
-    # Reorder DataFrame
-    df = df[match_columns + [col for col in df.columns if col not in match_columns]]
-    return df
-
-picks_df = put_match_columns_first(picks_df)
-holdings_df = put_match_columns_first(holdings_df)
-
-
-join_res = join_holdings_and_picks(holdings_df,picks_df)
+join_res,match_columns = join_holdings_and_picks(holdings_df,picks_df)
 
 #PERF: this code is probably inefficient, not a pandas expert
 res = []
-
-def sort_rows_by_priority(rows : list):
-    rows.sort()
 
 for hi in holdings_df.index:
     joined_rows = join_res[join_res['holdings_index'] == hi]
     num_joined_rows = len(joined_rows)
     if(num_joined_rows == 0):
         res.append(holdings_df.loc[hi].to_dict())
-        res[-1]['JoinResult'] = 'None'
+        res[-1][ftypes.SpecialColumns.JoinResult.get_col_name()] = 'None'
     elif(num_joined_rows == 1):
         res.append(joined_rows.iloc[0].to_dict())
-        res[-1]['JoinResult'] = '1:1'
+        res[-1][ftypes.SpecialColumns.JoinResult.get_col_name()] = '1:1'
     elif(num_joined_rows > 1):
-        sorted_join_rows = joined_rows.sort_values(by=[ftypes.assert_column_name('PickPriority')])
+        sorted_join_rows = joined_rows.sort_values(by=[ftypes.SpecialColumns.PickPriority.get_col_name()])
 
         res.append(sorted_join_rows.iloc[0].to_dict())
-        desc = ",".join([r[ftypes.assert_column_name('PickDesc')] for _,r in sorted_join_rows.iterrows()])
+        desc = ",".join([r[ftypes.SpecialColumns.PickDesc.get_col_name()] for _,r in sorted_join_rows.iterrows()])
 
-        res[-1]['JoinResult'] = 'Many'
-        res[-1]['JoinAll'] = desc
-
-#put_columns_in_front()
+        res[-1][ftypes.SpecialColumns.JoinResult.get_col_name()] = 'Many'
+        res[-1][ftypes.SpecialColumns.JoinAll.get_col_name()] = desc
 
 
 res_pd = pd.DataFrame(res)
+
+def move_columns_to_front(df, columns_to_front):
+    """
+    Reorder DataFrame columns by moving specified columns to the front.
+    """
+    #remove any columns that aren't in the dataframe (for example, if there are no many joins, then they're won't be a JoinMany)
+    columns_to_front = [col for col in columns_to_front if col in df.columns]
+
+    # Create a new column order
+    new_order = columns_to_front + [col for col in df.columns if col not in columns_to_front]
+    
+    # Return the reordered DataFrame
+    return df[new_order]
+
+match_columns = list(match_columns)
+match_columns.sort()
+
+#res_pd = move_columns_to_front(res_pd,match_columns+[ftypes.SpecialColumns.JoinResult.get_col_name(),ftypes.SpecialColumns.JoinAll.get_col_name()])
+front_columns = [sc.get_col_name() for sc in ftypes.SpecialColumns]
+front_columns.sort()
+
+res_pd = move_columns_to_front(res_pd,front_columns)
+
+fill_in_forex(res_pd)
 
 print(res_pd.to_csv())
 print("-"*40)

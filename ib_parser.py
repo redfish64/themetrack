@@ -63,7 +63,9 @@ def generic_parse(file):
 
                 
                 if(table_name in tables):
-                    csv_warning(row,row_index,0,"Table specified twice, both will be parsed")
+                    #co: this is a common occurrence, no need to worry.
+                    #csv_warning(row,row_index,0,"Table specified twice, both will be parsed")
+                    pass
                 else:
                     tables[table_name] = []
 
@@ -109,7 +111,12 @@ def parse_holding_activity(file):
     #join open positions and ffi so we get more information on each stock owned
     res = pd.merge(op, fii, on=['Asset Category','Symbol'], how='inner',validate='1:1')
 
-    res[ftypes.assert_column_name("Brokerage")] = ftypes.Brokerage.InteractiveBrokers.name
+    res[ftypes.SpecialColumns.Brokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
+
+    file_attrs = tables['Statement'][0].rows
+
+    for name,val in file_attrs:
+        res[name] = val
 
     return res
 

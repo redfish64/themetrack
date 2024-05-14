@@ -1,6 +1,8 @@
+import csv
 import logging
 import os
 from enum import Enum, auto
+import re
 import openpyxl as op
 import pandas as pd
 
@@ -45,7 +47,16 @@ def csv_error(row,row_index,col_index,desc):
  
 def csv_warning(row,row_index,col_index,desc):
     csv_msg(row,row_index,col_index,ErrorType.Warning,desc)
- 
+
+def csv_assert_match(regex, row_index, col_index, row, message):
+    """Parses a cell using given regex. If doesn't match, errors out. Returns m.groups()
+    """
+    m = re.match(regex,row[col_index])
+    if(m is None):
+        csv_error(row,row_index,row_index,f"Can't match {regex}: {message}")
+
+    return m.groups()
+
 def csv_cell_standardize(c : str):
     """Converts None to '' and removes leading and trailing whitespace from strings
     """
@@ -72,7 +83,7 @@ def read_standardized_csv(fp : str,min_row_len=0,worksheet_number=0):
         return arr
     
     def remove_trailing_empty_cells(r):
-        for i in range(len(r)-1,0,-1):
+        for i in range(len(r)-1,-1,-1):
             c = csv_cell_standardize(r[i])
             if(c != ''):
                 return list(r[0:i+1])
@@ -90,7 +101,8 @@ def read_standardized_csv(fp : str,min_row_len=0,worksheet_number=0):
         ws = wb.worksheets[worksheet_number]
         data = list(ws.iter_rows(values_only=True))
     elif(fp.endswith(".csv")):
-        data = open(fp).read()
+        fh = open(fp, newline='')
+        data = csv.reader(fh)
     else:
         error(f"don't know how to read {fp}")
     

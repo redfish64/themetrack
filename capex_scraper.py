@@ -120,9 +120,9 @@ def convert_capex_portfolio_data_to_pandas(td_json):
     pick_type = ftypes.CAPEX_FILENAME_TO_PICK_TYPE[fn]
     refreshed_date = datetime.datetime.fromtimestamp(int(td['refreshed'])/1000)
 
-    res[ftypes.assert_column_name("CapexName")] = fn
-    res[ftypes.assert_column_name("RefreshedDate")]= refreshed_date
-    res[ftypes.assert_column_name("PickType")]= pick_type
+    res[ftypes.SpecialColumns.CapexName.get_col_name()] = fn
+    res[ftypes.SpecialColumns.RefreshedDate.get_col_name()]= refreshed_date
+    res[ftypes.SpecialColumns.PickType.get_col_name()]= pick_type
 
     return res
 

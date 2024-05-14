@@ -4,6 +4,7 @@ from re import L
 
 from enum import Enum, auto
 import re
+
 import util
 
 CAPEX_FILENAME_TO_PICK_TYPE= {
@@ -14,41 +15,86 @@ CAPEX_FILENAME_TO_PICK_TYPE= {
     "Divi Portfolio" : "CapexDiviPortfolio",
 }
 
-class Brokerage(Enum):
-    InteractiveBrokers = auto()
+class BrokerageTypes(Enum):
+    InteractiveBrokers = auto(),
+    Schwab = auto(),
 
-#columns that are either read from or populated by the finance app
-SPECIAL_COLUMNS_TO_DESCRIPTION = {
-    "Brokerage": f"brokerage security is held at, populated by finance app, one of {",".join(Brokerage._member_names_)}",
-    "PickType": f"type of pick, capex big5, capex total portfolio, etc., one of "
-                f"{",".join(CAPEX_FILENAME_TO_PICK_TYPE.values())}, populated by finance app",
-    "PickPriority": """
+class SCType(Enum):
+    Data = auto(),
+    Magic = auto(),
+    Report = auto(),
+
+class SpecialColumns(Enum):
+    Brokerage = auto(),
+    PickType = auto(),
+    PickPriority = auto(),
+    PickDesc = auto(),
+    JoinResult = auto(),
+    JoinAll = auto(),
+    MatchColumns = auto(),
+    CapexName = auto(),
+    RefreshedDate = auto(),
+    AcctName = auto()
+
+
+    def get_col_name(self):
+        COL_TYPE = {
+            SpecialColumns.Brokerage: SCType.Data,
+            SpecialColumns.PickType: SCType.Report,
+            SpecialColumns.PickPriority: SCType.Magic,
+            SpecialColumns.PickDesc: SCType.Magic,
+            SpecialColumns.JoinResult: SCType.Data,
+            SpecialColumns.JoinAll: SCType.Data,
+            SpecialColumns.MatchColumns: SCType.Magic,
+            SpecialColumns.CapexName: SCType.Data,
+            SpecialColumns.RefreshedDate: SCType.Data,
+            SpecialColumns.AcctName: SCType.Data
+        }   
+
+        match COL_TYPE[self]:
+            case SCType.Data:
+                pre = "D"
+            case SCType.Magic:
+                pre = "M"
+            case SCType.Report:
+                pre = "R"
+        
+        return f"{pre}:{self.name}"
+            
+    def get_col_desc(self):
+            #columns that are either read from or populated by the finance app
+            DESCRIPTION = {
+                SpecialColumns.Brokerage: f"brokerage security is held at, populated by finance app, one of {",".join(BrokerageTypes._member_names_)}",
+                SpecialColumns.PickType: f"type of pick, capex big5, capex total portfolio, etc., one of "
+                            f"{",".join(CAPEX_FILENAME_TO_PICK_TYPE.values())}, populated by finance app",
+                SpecialColumns.PickPriority: """
 ThemePriority is used when there are multiple matches 
 for a held security. The one with the lower ThemePriority 
 value (closer to 1) will be chosen as the theme. So if a 
 security is in both CapexSkeletonPortfolio with ThemePriority 2, 
 and CapexDiviPortfolio with ThemePriority 3, then CapexSkeletonPortfolio 
 will be chosen""",
-    "PickDesc": "The way to describe additional picks for a one to many scenario",
-    "JoinRes": """
-The result of matching holdings to picks:
-    1:1  - holding exactly matches a single pick
+                SpecialColumns.PickDesc: "The way to describe additional picks for a one to many scenario",
+                SpecialColumns.JoinResult: """
+SpecialColumns.The result of matching holdings to picks:
+    SpecialColumns.1:1  - holding exactly matches a single pick
     Many - holding matches more than one pick
     None - holding matches no picks
 """,
-    "MatchColumns": """
+                SpecialColumns.JoinAll: "If the JoinResult is many, a comma separated list of picks that were matched",
+                SpecialColumns.MatchColumns: """
 This field determines how the holdings and picks are joined. It is a comma separated list of holdings to a 
 comma separated list of picks, ex. "Region,Ticker=Region,Ticker"
 """,
-    "CapexName" : 'fileName from capex json',
-    "RefreshedDate" : 'refreshed field from capex json',
-}
+                SpecialColumns.CapexName: 'fileName from capex json',
+                SpecialColumns.RefreshedDate: 'refreshed field from capex json',
+                SpecialColumns.AcctName: 'name of account security is related to',
+            }
 
-def assert_column_name(col_name):
-    if(col_name not in SPECIAL_COLUMNS_TO_DESCRIPTION):
-        util.error(f"Internal error, looking for {col_name} in SPECIAL_COLUMNS_TO_DESCRIPTION")
+            return DESCRIPTION[self]
 
-    return col_name
+    
+
 
 
 
