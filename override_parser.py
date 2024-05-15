@@ -84,6 +84,12 @@ def create_match_condition(name,val_str):
     else:
         return MatchCondition(name,val_str)
 
+def fixed_column(str):
+    return str+"___FIXED___"
+
+def is_fixed_column(s : str):
+    return s.endswith("___FIXED___")
+
 class OverrideRule:
     def __init__(self) -> None:
         self.match_conditions = []
@@ -121,14 +127,26 @@ class OverrideRule:
         
         return (True, var_subs)
     
-    def apply(self,var_subs,df,index):
+    def apply(self,var_subs,df,index, is_user_rule=False):
+        """_summary_
+
+        Args:
+            var_subs (_type_): _description_
+            df (_type_): _description_
+            index (_type_): _description_
+            is_user_rule (bool, optional): If true, the result of the rule cannot be changed by a non-user rule. Defaults to False.
+        """
         def replace_var_sub(match):
             var_name = match.group(1)  # Extract the variable name from the match
             return var_subs.get(var_name, match.group(0))  # Return the value or the original string
 
         for r_name,r_value in self.replacements:
             updated_val = re.sub(r'\$\{(\w+)\}', replace_var_sub, r_value)
-            df.at[index,r_name] = updated_val
+            fixed_col = fixed_column(r_name)
+            if(fixed_col not in df or pd.isna(df.at[index,fixed_col]) or is_user_rule):
+                df.at[index,r_name] = updated_val
+                if(is_user_rule):
+                    df.at[index,fixed_col] = True
 
 def parse_match_columns(s : str):
     m = re.match(r'([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))\s*=\s*([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))$',s)
@@ -138,7 +156,15 @@ def parse_match_columns(s : str):
 
     return holding_columns_str.split(','),pick_columns_str.split(',')
 
-def parse_override_file(fp : str):
+def parse_override_file(fp : str) -> list[OverrideRule]:
+    """parses a file containing rules to match and replace data values
+
+    Args:
+        fp (str): file to read rules from
+
+    Returns:
+        _type_: parsed rules
+    """
     fi = enumerate(util.read_standardized_csv(fp,min_row_len=4))
 
     #we allow the user to put some preamble stuff containing whatever they want before the main match/replacement table
@@ -181,24 +207,46 @@ def parse_override_file(fp : str):
     return rules
 
 
-def run_overrides(rules : list[OverrideRule], df : pd.DataFrame):
-    #TODO 2 have two separate rules, internal and user.
-    #we run:
-    #  1. internal
-    #  2. user
-    #  3. internal (again)
+def run_overrides(system_rules : list[OverrideRule], user_rules : list[OverrideRule], df : pd.DataFrame):
+    """Runs override rules against the data frame.
 
-    #this is so that the user can come up with their own rules and not worry about their order
-    #For example, suppose the user wants to make a rule that sets the exchange to HK
-    #The main rules set the region based on the exchange. So in that case we'd have to run the
-    #user rules first. However, if they read a value, such as R:Ticker, then we have to
-    #run their rules after, since R:Ticker isn't populated until then.
+    Args:
+        system_rules (list[OverrideRule]): These are rules that are run for every dataset and basically are hardcoded. 
+          They are overrideable by user rules
+        user_rules (list[OverrideRule]): These rules are for user exceptions, such as changing a ticker or an exchange to something that
+          matches whats in Picks, etc. System rules will be run before and after all user rules. However system rules will never change
+          the result of a user rule
+        df (pd.DataFrame): Dataframe to update
+    """
+
     for index in df.index:
-        for r in rules:
+        for r in system_rules:
             (does_match,var_subs) = r.matches(df,index)
             if(does_match):
                 r.apply(var_subs,df,index)
 
+    user_rule_matched = False
+    for index in df.index:
+        for r in user_rules:
+            (does_match,var_subs) = r.matches(df,index)
+            if(does_match):
+                r.apply(var_subs,df,index, is_user_rule=True)
+                user_rule_matched = True
+
+    if(user_rule_matched):
+        for index in df.index:
+            for r in system_rules:
+                (does_match,var_subs) = r.matches(df,index)
+                if(does_match):
+                    r.apply(var_subs,df,index)
+
+    #clean up "fixed" columns
+    to_delete = []
+    for c in df.columns:
+        if(is_fixed_column(c)):
+            to_delete.append(c)
+
+    df.drop(columns=to_delete)
 
 if __name__ == '__main__':
     parse_override_file(sys.argv[1])

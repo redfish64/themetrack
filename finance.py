@@ -37,6 +37,9 @@ def is_ib_holding_activity_csv(filename : str):
 def is_schwab_csv(filename : str):
     return re.match(r"^holdings_schwab.*\.(?:csv|xlsx)$",filename.lower()) is not None
 
+def is_system_overrides_file(filename : str):
+    return re.match(r"^system_overrides.*\.(?:csv|xlsx)$",filename.lower()) is not None
+
 def is_overrides_file(filename : str):
     return re.match(r"^overrides.*\.(?:csv|xlsx)$",filename.lower()) is not None
 
@@ -89,7 +92,8 @@ config = parser.parse_args()
 picks_df = pd.DataFrame()
 holdings_df = pd.DataFrame()
 
-overrides = []
+system_overrides = []
+user_overrides = []
 
 data_dir_files = os.listdir(config.finance_dir)
 data_dir_files.sort()
@@ -109,16 +113,19 @@ for item in data_dir_files:
             schwab_df = schwab_parser.parse_file(item_path)
 
             holdings_df = pd.concat([holdings_df,schwab_df],ignore_index=True)
+        elif is_system_overrides_file(item):
+            ov = override_parser.parse_override_file(item_path)
+            system_overrides += ov
         elif is_overrides_file(item):
             ov = override_parser.parse_override_file(item_path)
-            overrides += ov
+            user_overrides += ov
         else:
             util.warn(f"skipping file {item_path}, don't know how to handle")
     else:
         util.warn(f"skipping dir {item_path}")
 
-override_parser.run_overrides(overrides,picks_df)
-override_parser.run_overrides(overrides,holdings_df)
+override_parser.run_overrides(system_overrides,user_overrides,holdings_df)
+override_parser.run_overrides(system_overrides,user_overrides,picks_df)
 
 
 join_res,match_columns = join_holdings_and_picks(holdings_df,picks_df)
