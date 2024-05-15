@@ -99,6 +99,8 @@ def parse_file(fp : str):
     res[ftypes.SpecialColumns.Brokerage.get_col_name()] = ftypes.BrokerageTypes.Schwab.name
     res[ftypes.SpecialColumns.RefreshedDate.get_col_name()] = datetime.date(int(yyyy),int(mm),int(dd))
 
+    return res
+
 
 if __name__ == '__main__':
     df = parse_file(sys.argv[1])

@@ -1,18 +1,11 @@
 import argparse
 import re
-from forex_python.converter import CurrencyRates
-import diskcache as dc
+from currency_converter import CurrencyConverter
 from datetime import date
 
 from util import error
 
-cache = dc.Cache('finane_cache')
-
-converter = CurrencyRates()
-
-@cache.memoize()
-def get_rate(curr_from,curr_to,conv_date):
-    return converter.get_rate(curr_from,curr_to,conv_date)
+converter = CurrencyConverter()
 
 def convert(curr_from,curr_to,amt,conv_date=None):
     """converts one currency to another on the given date
@@ -28,7 +21,8 @@ def convert(curr_from,curr_to,amt,conv_date=None):
     """
     if(conv_date is None):
         conv_date = date.today()
-    return get_rate(curr_from,curr_to,conv_date) * amt
+    #TODO 2 we aren't using date for now
+    return converter.convert(amt,curr_from,curr_to)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

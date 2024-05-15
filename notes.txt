@@ -1,37 +1,31 @@
-We have a python parser for each filetype, ib, schwab, capex, tdameritrade
+We have a python parser for each filetype, ib, schwab, capex
 
 We have a directory of files to load to produce a result.
 We may in the future allow api driven access to data, and this could be saved to a directory if the user wants
 
-Each parser will determine the names, and how to interpret each field
+There are two main functions:
+1. Populate the data directory. This includes override rules, forex data, brokerage reports, and capex reports.
+2. Process the data directory to a result directory, which includes debugging files, associations between rows in 
+holdings and picks to override_rules, and an error/warning report. 
 
+Note that we always start from the input data, because we don't want to have conditions like having to refresh the master of record, and then
+produce reports as two separate steps. It's confusing.
 
 We will end up with a few classes:
 Holding - a position that is held by the account
 Pick - a pick of a particular stock
 
-browser cookies can be grabbed using this project, I guess:
-https://github.com/borisbabic/browser_cookie3
+Forex value date. This will be taken from the brokerage report date. Since the brokerage report also 
+displays the current value, then, it only makes sense that we convert the currency on that date. 
+If we took the current value indepedently, from the web or something, then it may make more sense
+to use a different date.
 
-There will also be a user editable config file that specified mappings between stocks and picks and maybe other things.
-Here is an example:
+We start with a "snapshot". A snapshot has 3 subdirs as above, data, master_record, and reports
+ 
+So from the user interface there is a function "create snapshot", with an option to copy over the last snapshots 
+user overrides.
 
-FileType	Match		Replacement	
-CapexBig5	Market	NYSEAMERICAN	Market	NYSE
-CapexBig5	Market	Foobar	Symbol	Nerf
-	Symbol	Jerf		
-CapexBig5	Market	US	Market	NYSE,AMEX,NASDAQ
+Then we start the first step for gathering data. Have screens for brokerage reports, capex reports, and forex.
 
-There are groups, so that whenever there is a non empty FileType, then a new record is created
-Each record will match specified columns, and then if they match, the replacement is run
-
-Replacement records will run in order. User replacements will be forst.
-specifies "Market:NYSEAMERICAN,Symbol:Foo" -> Symbol:Foo2 then it would match even though
-there is a Market:NYSEAMERICAN -> Market:NYSE
-
-Any column can be matched and any column can be set. This way a Theme can be manually set
-for specific symbols, "Symbol:XZY" -> "Theme:SuperBestTheme"
-
-Matched records will be recorded in a "Override Notes" column for each row.
-
-We can even do re, by prefixing with "re:" if necessary.
+Then the user hits go, we do the master of record, report any errors or warnings, and include them in the master of record
+subdir. Also an association between each row in the brokerage/capex and each override rule, for debugging.

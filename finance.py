@@ -11,6 +11,7 @@ import schwab_parser
 import pandas as pd
 from functools import cmp_to_key
 import ftypes
+import forex
 
 
 def get_files_with_ext(directory, ext):
@@ -105,9 +106,9 @@ for item in data_dir_files:
 
             holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
         elif is_schwab_csv(item):
-            ib_df = schwab_parser.parse_file(item_path)
+            schwab_df = schwab_parser.parse_file(item_path)
 
-            holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
+            holdings_df = pd.concat([holdings_df,schwab_df],ignore_index=True)
         elif is_overrides_file(item):
             ov = override_parser.parse_override_file(item_path)
             overrides += ov
@@ -162,13 +163,25 @@ def move_columns_to_front(df, columns_to_front):
 match_columns = list(match_columns)
 match_columns.sort()
 
+
+def fill_in_forex(df):
+
+    def update_native_currency(row):
+        curr_from = row[ftypes.SpecialColumns.CurrValueCurrency.get_col_name()]
+        amt_from = row[ftypes.SpecialColumns.CurrValueForeign.get_col_name()]
+        amt_to = forex.convert(curr_from,"USD",amt_from) #TODO 2 figure out dates here
+
+        return amt_to
+
+    df[ftypes.SpecialColumns.CurrValue.get_col_name()] = df.apply(update_native_currency,axis=1)
+
+fill_in_forex(res_pd)
+
 #res_pd = move_columns_to_front(res_pd,match_columns+[ftypes.SpecialColumns.JoinResult.get_col_name(),ftypes.SpecialColumns.JoinAll.get_col_name()])
-front_columns = [sc.get_col_name() for sc in ftypes.SpecialColumns]
+front_columns = [c for c in res_pd.columns if re.match(r'^[A-Z]:',c)]
 front_columns.sort()
 
 res_pd = move_columns_to_front(res_pd,front_columns)
-
-fill_in_forex(res_pd)
 
 print(res_pd.to_csv())
 print("-"*40)

@@ -34,7 +34,10 @@ class SpecialColumns(Enum):
     MatchColumns = auto(),
     CapexName = auto(),
     RefreshedDate = auto(),
-    AcctName = auto()
+    AcctName = auto(),
+    CurrValueCurrency = auto(),
+    CurrValueForeign = auto(),
+    CurrValue = auto(),
 
 
     def get_col_name(self):
@@ -48,7 +51,10 @@ class SpecialColumns(Enum):
             SpecialColumns.MatchColumns: SCType.Magic,
             SpecialColumns.CapexName: SCType.Data,
             SpecialColumns.RefreshedDate: SCType.Data,
-            SpecialColumns.AcctName: SCType.Data
+            SpecialColumns.AcctName: SCType.Data,
+            SpecialColumns.CurrValueCurrency: SCType.Report,
+            SpecialColumns.CurrValueForeign: SCType.Report,
+            SpecialColumns.CurrValue: SCType.Report,
         }   
 
         match COL_TYPE[self]:
@@ -89,6 +95,9 @@ comma separated list of picks, ex. "Region,Ticker=Region,Ticker"
                 SpecialColumns.CapexName: 'fileName from capex json',
                 SpecialColumns.RefreshedDate: 'refreshed field from capex json',
                 SpecialColumns.AcctName: 'name of account security is related to',
+                SpecialColumns.CurrValueCurrency: f'currency of {SpecialColumns.CurrValueForeign.get_col_name()}',
+                SpecialColumns.CurrValueForeign: 'current value in foreign currency',
+                SpecialColumns.CurrValue: 'current value in USD', #TODO 2.5 allow other currencies
             }
 
             return DESCRIPTION[self]
