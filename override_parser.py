@@ -246,7 +246,7 @@ def run_overrides(system_rules : list[OverrideRule], user_rules : list[OverrideR
         if(is_fixed_column(c)):
             to_delete.append(c)
 
-    df.drop(columns=to_delete)
+    df.drop(columns=to_delete,inplace=True)
 
 if __name__ == '__main__':
     parse_override_file(sys.argv[1])
