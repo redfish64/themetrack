@@ -111,7 +111,7 @@ def parse_holding_activity(file):
     #join open positions and ffi so we get more information on each stock owned
     res = pd.merge(op, fii, on=['Asset Category','Symbol'], how='inner',validate='1:1')
 
-    res[ftypes.SpecialColumns.Brokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
+    res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
 
     file_attrs = tables['Statement'][0].rows
 

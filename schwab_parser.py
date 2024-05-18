@@ -92,12 +92,12 @@ def parse_file(fp : str):
         if(at_eof):
             break
 
-    headers = SCHWAB_HEADERS+[ftypes.SpecialColumns.AcctName.get_col_name()]
+    headers = SCHWAB_HEADERS+[ftypes.SpecialColumns.DAcctName.get_col_name()]
 
     res =  pd.DataFrame(all_rows,columns=headers)
 
-    res[ftypes.SpecialColumns.Brokerage.get_col_name()] = ftypes.BrokerageTypes.Schwab.name
-    res[ftypes.SpecialColumns.RefreshedDate.get_col_name()] = datetime.date(int(yyyy),int(mm),int(dd))
+    res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.Schwab.name
+    res[ftypes.SpecialColumns.DRefreshedDate.get_col_name()] = datetime.date(int(yyyy),int(mm),int(dd))
 
     return res
 
