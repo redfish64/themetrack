@@ -77,15 +77,55 @@ def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame)
     res = pd.concat(res_df_list, ignore_index=True)
     return res,all_match_columns.keys()
 
-parser = argparse.ArgumentParser(
-    usage="%(prog)s [options] [directory of financial snapshot]...",
-    description="joins holdings files with recommendation files for analysis in a spreadsheet",
-    exit_on_error=True,
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter
-)
-parser.add_argument("finance_dir", help="directory containing financial snapshot")
 
-config = parser.parse_args()
+def get_main_dir():
+    if os.name == 'nt':  # Windows
+        base_dir = "C:\\"
+        config_dir = os.path.join(base_dir, 'Theme Track')
+    else:  # Linux
+        base_dir = os.path.expanduser('~')
+        config_dir = os.path.join(base_dir, 'theme_track')
+
+    return config_dir
+
+default_main_dir = get_main_dir()
+
+def scrape(args):
+    print("scraping!")
+
+def create_reports(args):
+    print("creating reports!")
+
+def setup_argparse():
+    parser = argparse.ArgumentParser(
+        description="joins holdings files with pick files for analysis in a spreadsheet",
+        exit_on_error=True,
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument("main-dir", default=default_main_dir, help="main directory of theme track. All reports, config and data files will go here")
+
+    subparsers = parser.add_subparsers(title="commands", description="Available commands", help="Use `command -h` for more details", dest="command")
+
+    # Subparser for the 'scrape' command
+    parser_scrape = subparsers.add_parser('scrape', help="Scrape data from the specified source. Make sure to log in the website prior to calling this")
+    parser_scrape.add_argument('browser', type=str, choices=["chrome","firefox","brave"], help="The browser used to login to website")
+    parser_scrape.add_argument('source', type=str, default="capex", choices=["capex"], help="The data source to scrape from")
+    parser_scrape.set_defaults(func=scrape)
+
+
+    # Subparser for the 'create-reports' command
+    parser_create_reports = subparsers.add_parser('create-reports', help="Create reports from the provided data")
+    parser_create_reports.add_argument('--input', type=str, required=True, help="The input data file")
+    parser_create_reports.add_argument('--report-type', type=str, choices=['pdf', 'html'], required=True, help="The type of report to generate")
+    parser_create_reports.set_defaults(func=create_reports)
+
+# Call the appropriate function based on the command
+if args.command:
+    args.func(args)
+else:
+    parser.print_help()
+
+
 
 picks_df = pd.DataFrame()
 holdings_df = pd.DataFrame()
