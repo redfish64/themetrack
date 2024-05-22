@@ -10,6 +10,8 @@ import util
 FINANCE_DATA_DIR = "data"
 FINANCE_REPORTS_DIR = "reports"
 
+THEME_TRACK_CONFIG_FILE = 'theme_track_config.xlsx'
+
 CAPEX_FILENAME_TO_PICK_TYPE= {
     "Closed Positions" : "CapexClosed",
     "BIG 5 MEMBERS AREA" : "CapexBig5",

@@ -3,7 +3,7 @@ import os
 import subprocess
 import platform
 
-def open_directory(path):
+def open_dir(path):
     if platform.system() == "Windows":
         # Open directory in Windows File Explorer
         os.startfile(path)
@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     parser_opendir = subparsers.add_parser('open_dir', help="Opens a directory in some weird gui way")
     parser_opendir.add_argument('dir', type=str,help="dir to open")
-    parser_opendir.set_defaults(func=lambda args: open_directory(args.dir))
+    parser_opendir.set_defaults(func=lambda args: open_dir(args.dir))
 
     args = parser.parse_args()
 

@@ -20,12 +20,28 @@ displays the current value, then, it only makes sense that we convert the curren
 If we took the current value indepedently, from the web or something, then it may make more sense
 to use a different date.
 
-We start with a "snapshot". A snapshot has 3 subdirs as above, data, master_record, and reports
- 
-So from the user interface there is a function "create snapshot", with an option to copy over the last snapshots 
-user overrides.
+We start with a "snapshot". A snapshot has 2 subdirs as above, data, and reports. A config/override file is in the main directory
 
-Then we start the first step for gathering data. Have screens for brokerage reports, capex reports, and forex.
+First the user runs:
 
-Then the user hits go, we do the master of record, report any errors or warnings, and include them in the master of record
-subdir. Also an association between each row in the brokerage/capex and each override rule, for debugging.
+$ theme_track.py create_snapshot
+Snapshot created at C:\theme_track\2024-05-24
+
+This will create the new directory, and place theme_track_config.xlsx
+By default this will be copied from the last theme_track report or a hardcoded one somewhere (how to do this with pyinstaller?)
+
+Then they fill it up with reports from their brokerage(s). Then they login to capexinsider.com and run:
+$ theme_track.py scrape_capex chrome
+Read capex snapshot
+
+Finally they run:
+$ theme_track.py create_report
+
+which will run the report and popup excel for them (or libreoffice). Popping up libreoffice or excel will be a configurable option.
+If they need to adjust the custom rules, etc. they can do so and rerun create_report
+
+
+We have a separate system_rules and custom rules. We do this because if we release a new version, we want to be able to update the 
+system_rules as well. Otherwise, the old system rules will be copied over with the regular config when a new snapshot is created.
+
+
