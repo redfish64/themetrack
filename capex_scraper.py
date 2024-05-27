@@ -1,4 +1,5 @@
 from math import inf
+import os
 from weakref import ref
 import requests
 from bs4 import BeautifulSoup
@@ -125,6 +126,15 @@ def convert_capex_portfolio_data_to_pandas(td_json):
     res[ftypes.SpecialColumns.RPickType.get_col_name()]= pick_type
 
     return res
+
+def read_capex_to_dir(browser : scraper_util.Browser, dir):
+    opener = scraper_util.create_url_opener(browser=browser)
+
+    (capex_html,infogram_htmls,table_data_json) = read_capex_portfolio_html(opener)
+
+    for index,td in enumerate(table_data_json):
+        open(os.path.join(dir,f"out_table_data_{index}.json"),"wb").write(td)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

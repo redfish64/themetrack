@@ -45,3 +45,7 @@ We have a separate system_rules and custom rules. We do this because if we relea
 system_rules as well. Otherwise, the old system rules will be copied over with the regular config when a new snapshot is created.
 
 
+TODO:
+
+picks report that includes holdings. This is useful for figuring out what other stocks may be part of a particular theme
+ability to add or change columns used in reports, and even decide which reports to show.

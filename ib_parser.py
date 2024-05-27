@@ -45,7 +45,7 @@ def generic_parse(file):
 
     tables = {}
 
-    with open(file, newline='') as csvfile:
+    with open(file, newline='', encoding='utf-8-sig') as csvfile:
         reader = csv.reader(csvfile)
 
         def remove_blank_trailing_cells(row : list):

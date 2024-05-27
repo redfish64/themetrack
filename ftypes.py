@@ -20,6 +20,8 @@ CAPEX_FILENAME_TO_PICK_TYPE= {
     "Divi Portfolio" : "CapexDiviPortfolio",
 }
 
+SYSTEM_RULES_FILENAME="system_rules.xlsx"
+
 class BrokerageTypes(Enum):
     InteractiveBrokers = auto(),
     Schwab = auto(),

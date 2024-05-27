@@ -1,18 +1,12 @@
 import csv
+from functools import partial
 import logging
 import os
 from enum import Enum, auto
 import re
 import openpyxl as op
 import pandas as pd
-
-def get_code_file_path(file):
-    # Get the directory of the current script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Build the path to the file
-    return os.path.join(script_dir, file)
-
+import sys
 
 
 class ErrorType(Enum):
@@ -65,23 +59,38 @@ def csv_cell_standardize(c : str):
     
     return str(c).strip()
 
-def read_standardized_csv(fp : str,min_row_len=0,worksheet_number=0):
+def extend_array_to_min_length(min_len,arr):
+    # Calculate how many items need to be added
+    additional_items = max(0, min_len - len(arr))
+    
+    # Extend the array with empty strings if needed
+    arr.extend([""] * additional_items)
+    
+    return arr
+
+def extend_all_row_length(fi,min_len):
+    """Extends the row length of all csv rows to given min length by adding [""] to them
+
+    Args:
+        fi: iteration of arrays of strings
+
+    Returns:
+        iteration of arrays of strings
+    """
+    return map(partial(extend_array_to_min_length,min_len),fi)
+
+
+def read_standardized_csv(fp : str = None,wb = None, worksheet_name=None):
     """Regardless of whether an excel spreadsheet or a csv, reads it like a csv file.
        Trims left and right whitespace of all cells.
 
        Args:
-          min_row_len - specifies a minimum length for each row. Any row that is shorter
-             than this will have cells containing '' appended to meet this minimum.
+          fp - file path. Either fp or wb must be specified
+          wb - excel workbook
+          worksheet_name - if reading from a workbook, then the worksheet number to read.
+                           Default is the first page
+
     """
-    def extend_array_to_min_length(arr, min_len):
-        # Calculate how many items need to be added
-        additional_items = max(0, min_len - len(arr))
-        
-        # Extend the array with empty strings if needed
-        arr.extend([""] * additional_items)
-        
-        return arr
-    
     def remove_trailing_empty_cells(r):
         for i in range(len(r)-1,-1,-1):
             c = csv_cell_standardize(r[i])
@@ -92,13 +101,16 @@ def read_standardized_csv(fp : str,min_row_len=0,worksheet_number=0):
     def clean_csv_row(r):
         r = remove_trailing_empty_cells(r)
         r = [csv_cell_standardize(c) for c in r]
-        r = extend_array_to_min_length(r,min_row_len)
 
         return r
         
-    if(fp.endswith(".xlsx")):
-        wb = op.load_workbook(fp)
-        ws = wb.worksheets[worksheet_number]
+    if(wb is not None or fp.endswith(".xlsx")):
+        if(wb is None):
+            wb = op.load_workbook(fp)
+        if(worksheet_name is not None):
+            ws = wb[worksheet_name]
+        else:
+            ws = wb.worksheets[0]
         data = list(ws.iter_rows(values_only=True))
     elif(fp.endswith(".csv")):
         fh = open(fp, newline='')
@@ -133,3 +145,13 @@ def get_df_row_val(row,name):
 
     return v
 
+def get_installation_directory():
+    """Returns the path of the directory of the program. This should even work if using pyinstaller
+    TODO 2 test pyinstaller
+
+    Returns:
+        str: path
+    """
+    if hasattr(sys, '_MEIPASS'):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))

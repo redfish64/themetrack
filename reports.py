@@ -2,12 +2,13 @@ from functools import partial
 import pandas as pd
 import ftypes
 from openpyxl.styles import Font
+import array_log as al
 
 STOCKS_WS_TITLE = 'Securities Report'
 THEMES_WS_TITLE = 'Themes Report'
 HOLDINGS_WS_TITLE = 'Holdings Input Data'
 PICK_WS_TITLE = 'Pick Input Data'
-JOINED_DATA_WS_TITLE = 'Joined Securities and Picks Data'
+JOINED_DATA_WS_TITLE = 'Joined Data'
 NA_THEME_NAME = '(none)'
 
 #TODO 4 maybe one day parse the excel format, ex. '"$"#,##0.00', directly
@@ -52,7 +53,7 @@ def get_currency_format(currency_symbol):
 
     return currency_formats.get(currency_symbol, ('"$"#,##0.00',partial(calc_num_len,1,2)))  # Default format if not found
 
-def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame, native_currency_code : str, output_file : str) -> pd.DataFrame:
+def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame, native_currency_code : str, rules_log : al.Log, output_file : str) -> pd.DataFrame:
     COL_TO_REPORT_NAME = {
         ftypes.SpecialColumns.RCurrValue.get_col_name() : f"Value {native_currency_code}",
         ftypes.SpecialColumns.RExchange.get_col_name() : "Exchange",
@@ -185,6 +186,8 @@ def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : 
         add_df(holdings_df, HOLDINGS_WS_TITLE,always_use_generic_number_format=True)
         add_df(picks_df, PICK_WS_TITLE,always_use_generic_number_format=True)
         add_df(df, JOINED_DATA_WS_TITLE)
+
+        
 
 
 

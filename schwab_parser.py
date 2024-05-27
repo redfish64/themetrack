@@ -11,7 +11,7 @@ import pandas as pd
 SCHWAB_HEADERS = ("Symbol,Description,Quantity,Price,Price Change %,Price Change $,Market Value,Day Change %,Day Change $,Cost Basis"
                  ",Gain/Loss %,Gain/Loss $,Ratings,Reinvest Dividends?,Capital Gains?,% Of Account,Security Type").split(",")
 def parse_file(fp : str):
-    fi = enumerate(util.read_standardized_csv(fp,min_row_len=17))
+    fi = enumerate(util.extend_all_row_length(util.read_standardized_csv(fp),min_len=17))
     (ri,row) = next(fi)
 
     #first parse the date
