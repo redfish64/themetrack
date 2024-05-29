@@ -56,6 +56,12 @@ def is_config_file(filename : str):
     return filename == ftypes.THEME_TRACK_CONFIG_FILE
 
 def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame):
+    """Returns the cartesian product of holdings and picks using "RMatchColumns" in each
+    holding row to join them.
+
+    Returns:
+        pd.DataFrame: cartesian product
+    """
 
     # Set indices to preserve original row numbers
     holdings_df['holdings_index'] = holdings_df.index
@@ -224,6 +230,10 @@ def fill_in_forex(df):
     def update_native_currency(row):
         curr_from = row[ftypes.SpecialColumns.RCurrValueCurrency.get_col_name()]
         amt_from = row[ftypes.SpecialColumns.RCurrValueForeign.get_col_name()]
+
+        if(pd.isna(curr_from) or pd.isna(amt_from)):
+            return None
+        
         amt_to = forex.convert(curr_from,"USD",amt_from) #TODO 2 figure out dates here
 
         return amt_to
@@ -314,8 +324,29 @@ def create_reports(args):
             res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'Many'
             res[-1][ftypes.SpecialColumns.DJoinAll.get_col_name()] = desc
 
+    #add any empty picks with no investments
+    for pi in picks_df.index:
+        joined_rows = join_res[join_res['picks_index'] == pi]
+        num_joined_rows = len(joined_rows)
+        if(num_joined_rows == 0):
+            res.append(picks_df.loc[pi].to_dict())
+            res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'None'
 
     res_pd = pd.DataFrame(res)
+
+    #now update holdings rows to show which picks have multiple holdings for them.
+    #Ususally this shouldn't occur I would imagine, unless the user somehow owns the same security in multiple ways
+    #ADR's/non-ADR's, multiple brokerages, etc.
+    for pi in picks_df.index:
+        joined_rows = join_res[join_res['picks_index'] == pi]
+        
+        if(num_joined_rows > 1):
+            res.append(sorted_join_rows.iloc[0].to_dict())
+            desc_list = sorted([r[ftypes.SpecialColumns.RPickDesc.get_col_name()] for _,r in join_res.iterrows()])
+            desc = ",".join(desc_list)
+
+            res[res['picks_index'] == pi,ftypes.SpecialColumns.DMultHoldings.get_col_name()] = desc
+
 
 
     match_columns = list(match_columns)

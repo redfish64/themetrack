@@ -32,6 +32,7 @@ class SCType(Enum):
 
 class SpecialColumns(Enum):
     DBrokerage = auto(),
+    DMultHoldings = auto(),
     DJoinResult = auto(),
     DJoinAll = auto(),
     DCapexName = auto(),

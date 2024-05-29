@@ -26,7 +26,10 @@ def calc_num_len(fixed : int,num_decimals : int ,val : float):
 
     #we get the val_str for the number without any decimals to calculate its length correctly and simply
     #PERF could be faster
-    val_str = f"{round(val):,}"
+    if(isinstance(val,str)):
+        val_str = val
+    else:
+        val_str = f"{round(val):,}"
     return fixed + len(val_str) + (0 if num_decimals == 0 else num_decimals + 1) # +1 for the '.'
 
 def generic_len(val):
