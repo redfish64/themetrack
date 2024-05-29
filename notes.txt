@@ -45,6 +45,33 @@ We have a separate system_rules and custom rules. We do this because if we relea
 system_rules as well. Otherwise, the old system rules will be copied over with the regular config when a new snapshot is created.
 
 
+---
+
+Reports:
+
+Holdings report:
+
+Capex Cap Gains:
+- Holdings Report: should contain all stocks, even those not invested in
+- Theme Report:
+
+Capex Skeleton:
+- Holdings Report: should contain all stocks, even those not invested in
+- Theme Report:
+
+Big5:
+- Show all stocks, they can filter them out
+
+Overall Theme Report:
+- Theme report of all stocks trying to adjust categories in big5 to be umbrella
+
+Closed Report:
+- if any are here (and not anywhere else), report
+
+
+
+
+
 TODO:
 
 picks report that includes holdings. This is useful for figuring out what other stocks may be part of a particular theme

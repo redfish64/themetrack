@@ -132,8 +132,13 @@ def read_capex_to_dir(browser : scraper_util.Browser, dir):
 
     (capex_html,infogram_htmls,table_data_json) = read_capex_portfolio_html(opener)
 
+    if(len(table_data_json) == 0):
+        util.error("Could not read capex data. Make sure you selected the right browser and have logged into capexinsider.com")
+
+    #TODO 2 check that necessary tables are all there. Also check on load from cache
+
     for index,td in enumerate(table_data_json):
-        open(os.path.join(dir,f"out_table_data_{index}.json"),"wb").write(td)
+        open(os.path.join(dir,f"capex_data_{index}.json"),"wb").write(td)
 
 
 if __name__ == '__main__':

@@ -201,7 +201,7 @@ def create_snapshot(args):
 
 def download_capex(args):
     sub_dir = get_sub_dir_from_config(args)
-    capex_scraper.read_capex_to_dir(sub_dir)
+    capex_scraper.read_capex_to_dir(scraper_util.name_to_browser[args.browser], sub_dir)
 
     print(f"""Done!
 If your brokerage files are already in {sub_dir}, run "(cmd) {CREATE_REPORTS_COMMAND}", otherwise download them,
