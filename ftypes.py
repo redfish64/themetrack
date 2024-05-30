@@ -12,12 +12,20 @@ FINANCE_REPORTS_DIR = "reports"
 
 THEME_TRACK_CONFIG_FILE = 'theme_track_config.xlsx'
 
+class PickType(Enum):
+    CapexTotalPortfolio = auto(),
+    CapexSkeletonPortfolio = auto(),
+    CapexDiviPortfolio = auto(),
+    CapexBig5 = auto(),
+    CapexClosed = auto(),
+
+
 CAPEX_FILENAME_TO_PICK_TYPE= {
-    "Closed Positions" : "CapexClosed",
-    "BIG 5 MEMBERS AREA" : "CapexBig5",
-    "Total Portfolio" : "CapexTotalPortfolio",
-    "Skeleton Portfolio" : "CapexSkeletonPortfolio",
-    "Divi Portfolio" : "CapexDiviPortfolio",
+    "Closed Positions" : PickType.CapexClosed,
+    "BIG 5 MEMBERS AREA" : PickType.CapexBig5,
+    "Total Portfolio" : PickType.CapexTotalPortfolio,
+    "Skeleton Portfolio" : PickType.CapexSkeletonPortfolio,
+    "Divi Portfolio" : PickType.CapexDiviPortfolio,
 }
 
 SYSTEM_RULES_FILENAME="system_rules.xlsx"
@@ -61,7 +69,7 @@ class SpecialColumns(Enum):
             DESCRIPTION = {
                 SpecialColumns.DBrokerage: f"brokerage security is held at, populated by finance app, one of {",".join(BrokerageTypes._member_names_)}",
                 SpecialColumns.RPickType: f"type of pick, capex big5, capex total portfolio, etc., one of "
-                            f"{",".join(CAPEX_FILENAME_TO_PICK_TYPE.values())}, populated by finance app",
+                            f"{",".join([x.name for x in CAPEX_FILENAME_TO_PICK_TYPE.values()])}, populated by finance app",
                 SpecialColumns.RPickPriority: """
 ThemePriority is used when there are multiple matches 
 for a held security. The one with the lower ThemePriority 

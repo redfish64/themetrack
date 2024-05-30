@@ -22,7 +22,7 @@ def convert(curr_from,curr_to,amt,conv_date=None):
     if(conv_date is None):
         conv_date = date.today()
     #TODO 2 we aren't using date for now
-    return converter.convert(amt,curr_from,curr_to)
+    return converter.convert(amt,curr_from,curr_to, conv_date)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

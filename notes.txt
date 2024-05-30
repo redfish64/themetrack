@@ -49,30 +49,36 @@ system_rules as well. Otherwise, the old system rules will be copied over with t
 
 Reports:
 
-Holdings report:
+Ideas:
 
-Capex Cap Gains:
-- Holdings Report: should contain all stocks, even those not invested in
-- Theme Report:
+One issue is that you want to cover the theme. If you have 0% in a particular stock that you are invested in for a theme
+you'd want to fill it, for skeleton and total portfolio, at least, and probably divi, too. So it should be visible that you are 
+missing stocks of a theme. 
 
-Capex Skeleton:
-- Holdings Report: should contain all stocks, even those not invested in
-- Theme Report:
+Divi portfolio has Sector, which doesn't map exactly to a theme. 
 
-Big5:
-- Show all stocks, they can filter them out
+So I think we have two reports categories. First is cap/skeleton, showing all values in a theme together, regardless if invested in or not.
+Then we have a Theme report as normal
+Second is divi, which uses Sector, not Theme as it's main category. Here we also have a "Sector" report.
 
-Overall Theme Report:
-- Theme report of all stocks trying to adjust categories in big5 to be umbrella
-
-Closed Report:
-- if any are here (and not anywhere else), report
+The other issue is that sometimes picks overlap. skeleton stock BTU is also in Divi for example. So we need to display it as such
+(skel/divi). This way the user is at aware of the issue, so they have less reason to be confused as if we just ignored one.
 
 
 
 
 
-TODO:
 
-picks report that includes holdings. This is useful for figuring out what other stocks may be part of a particular theme
+
+
+
+---
+
+TODO 2: put capex and currency in separate directory. Add a notes sheet at the end indicating when each piece of data
+was scraped.
+
+
+
+
+TODO 2: picks report that includes holdings. This is useful for figuring out what other stocks may be part of a particular theme
 ability to add or change columns used in reports, and even decide which reports to show.

@@ -56,8 +56,13 @@ def get_currency_format(currency_symbol):
 
     return currency_formats.get(currency_symbol, ('"$"#,##0.00',partial(calc_num_len,1,2)))  # Default format if not found
 
-def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame, native_currency_code : str, rules_log : al.Log, output_file : str) -> pd.DataFrame:
+def make_portfolio_report(pick_type : ftypes.PickType, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame,):
+    
+
+
+def make_stock_report(joined_df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame, native_currency_code : str, rules_log : al.Log, output_file : str) -> pd.DataFrame:
     COL_TO_REPORT_NAME = {
+        ftypes.SpecialColumns.DCapexName.get_col_name() : "Portfolio",
         ftypes.SpecialColumns.RCurrValue.get_col_name() : f"Value {native_currency_code}",
         ftypes.SpecialColumns.RExchange.get_col_name() : "Exchange",
         ftypes.SpecialColumns.RTicker.get_col_name() : "Ticker",
@@ -80,22 +85,23 @@ def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : 
 
     GENERIC_EXCEL_TYPE = ("@",generic_len)
 
-    total_sum = df[ftypes.SpecialColumns.RCurrValue.get_col_name()].sum()
+    total_sum = joined_df[ftypes.SpecialColumns.RCurrValue.get_col_name()].sum()
 
     def get_total_perc(row):
         val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
 
         return val/total_sum
 
-    df[ftypes.SpecialColumns.RTheme.get_col_name()] = df[ftypes.SpecialColumns.RTheme.get_col_name()].fillna(NA_THEME_NAME)
+    joined_df[ftypes.SpecialColumns.RTheme.get_col_name()] = joined_df[ftypes.SpecialColumns.RTheme.get_col_name()].fillna(NA_THEME_NAME)
 
-    themes_df = pd.pivot_table(df, values=ftypes.SpecialColumns.RCurrValue.get_col_name(), 
+    themes_df = pd.pivot_table(joined_df, values=ftypes.SpecialColumns.RCurrValue.get_col_name(), 
                                     index=[ftypes.SpecialColumns.RTheme.get_col_name()],
                                     aggfunc="sum", fill_value=0).copy()
     
     themes_df[ftypes.SpecialColumns.RThemeTotalPerc.get_col_name()] = themes_df.apply(get_total_perc,axis=1)
     
     STOCKS_DF_SORT = [
+        ftypes.SpecialColumns.DCapexName.get_col_name(),
         ftypes.SpecialColumns.RTheme.get_col_name(),
         ftypes.SpecialColumns.RTicker.get_col_name(),
         ftypes.SpecialColumns.RExchange.get_col_name(),
@@ -105,7 +111,8 @@ def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : 
         ftypes.SpecialColumns.RTheme.get_col_name(),
     ]
     
-    stocks_df = df[[
+    stocks_df = joined_df[[
+        ftypes.SpecialColumns.DCapexName.get_col_name(),
         ftypes.SpecialColumns.RTheme.get_col_name(),
         ftypes.SpecialColumns.RExchange.get_col_name(),
         ftypes.SpecialColumns.RTicker.get_col_name(),
@@ -129,9 +136,9 @@ def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : 
         return theme_val/total_sum
 
     # we feed the data back into the main df, as well, so that the data page has all the data
-    df[ftypes.SpecialColumns.RThemePerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RThemePerc.get_col_name()]
-    df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()]
-    df[ftypes.SpecialColumns.RThemeTotalPerc.get_col_name()] = df.apply(get_theme_total_perc_for_df,axis=1)
+    joined_df[ftypes.SpecialColumns.RThemePerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RThemePerc.get_col_name()]
+    joined_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()]
+    joined_df[ftypes.SpecialColumns.RThemeTotalPerc.get_col_name()] = joined_df.apply(get_theme_total_perc_for_df,axis=1)
 
     def update_number_formats(orig_cols,ws,num_rows,always_use_generic=False):
         """Updates the style of the cell according to the column type, so percentages look like %0.01,
@@ -178,7 +185,7 @@ def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : 
         orig_theme_df_cols = list(themes_df.columns)
         themes_df.rename(columns=COL_TO_REPORT_NAME, inplace=True)
 
-        def add_df(df,title,orig_cols=list(df.columns),always_use_generic_number_format=False):
+        def add_df(df,title,orig_cols=list(joined_df.columns),always_use_generic_number_format=False):
             df.to_excel(writer, index=False, sheet_name=title)
             ws = writer.sheets[title]
             style_report_ws(ws)
@@ -188,7 +195,7 @@ def make_stock_report(df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : 
         add_df(themes_df, THEMES_WS_TITLE, orig_cols=orig_theme_df_cols)
         add_df(holdings_df, HOLDINGS_WS_TITLE,always_use_generic_number_format=True)
         add_df(picks_df, PICK_WS_TITLE,always_use_generic_number_format=True)
-        add_df(df, JOINED_DATA_WS_TITLE)
+        add_df(joined_df, JOINED_DATA_WS_TITLE)
 
         
 
