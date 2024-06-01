@@ -5,7 +5,8 @@ from datetime import date
 
 from util import error
 
-converter = CurrencyConverter()
+#TODO 2.1 warn when the date is not available, so user can download new currency tables
+converter = CurrencyConverter(fallback_on_missing_rate=True,fallback_on_wrong_date=True)
 
 def convert(curr_from,curr_to,amt,conv_date=None):
     """converts one currency to another on the given date

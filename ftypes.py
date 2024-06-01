@@ -19,6 +19,21 @@ class PickType(Enum):
     CapexBig5 = auto(),
     CapexClosed = auto(),
 
+PICK_TYPE_TO_BIT_FLAG = {
+    PickType.CapexTotalPortfolio : 1,
+    PickType.CapexSkeletonPortfolio : 2,
+    PickType.CapexDiviPortfolio : 4,
+    PickType.CapexBig5 : 8,
+    PickType.CapexClosed : 16,
+}
+
+def bit_mask_has_pick_type(bm : int, pt : PickType):
+     return (bm & PICK_TYPE_TO_BIT_FLAG[pt]) != 0
+
+def pick_types_to_bitmask(pt_list : list[PickType]):
+     return sum([PICK_TYPE_TO_BIT_FLAG[pt] for pt in pt_list])
+          
+
 
 CAPEX_FILENAME_TO_PICK_TYPE= {
     "Closed Positions" : PickType.CapexClosed,
@@ -43,12 +58,13 @@ class SpecialColumns(Enum):
     DMultHoldings = auto(),
     DJoinResult = auto(),
     DJoinAll = auto(),
-    DCapexName = auto(),
+    DJoinAllBitMask = auto(),
     DRefreshedDate = auto(),
+    DCapexName = auto(),
     DAcctName = auto(),
     RPickType = auto(),
-    RPickPriority = auto(),
     RPickDesc = auto(),
+    RPickPriority = auto(),
     RMatchColumns = auto(),
     RCurrValueCurrency = auto(),
     RCurrValueForeign = auto(),
@@ -56,9 +72,10 @@ class SpecialColumns(Enum):
     RExchange = auto(),
     RTicker = auto(),
     RTheme = auto(),
-    RThemePerc = auto(),
+    RSector = auto(),
+    RCatPerc = auto(),
     RTotalPerc = auto(),
-    RThemeTotalPerc = auto(),
+    RCatTotalPerc = auto(),
 
     def get_col_name(self):
         
@@ -101,7 +118,6 @@ comma separated list of picks, ex. "Region,Ticker=Region,Ticker"
             return DESCRIPTION[self]
 
     
-
 
 
 

@@ -155,3 +155,8 @@ def get_installation_directory():
     if hasattr(sys, '_MEIPASS'):
         return sys._MEIPASS
     return os.path.dirname(os.path.abspath(__file__))
+
+def default_df_val(v,default_v):
+    if(pd.isna(v)):
+        return default_v
+    return v

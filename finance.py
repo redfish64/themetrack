@@ -315,6 +315,11 @@ def create_reports(args):
         elif(num_joined_rows == 1):
             res.append(joined_rows.iloc[0].to_dict())
             res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = '1:1'
+            res[-1][ftypes.SpecialColumns.DJoinAll.get_col_name()] = res[-1][ftypes.SpecialColumns.RPickDesc.get_col_name()]
+            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = (
+                ftypes.pick_types_to_bitmask([ftypes.PickType[res[-1][ftypes.SpecialColumns.RPickType.get_col_name()]]])
+            )
+
         elif(num_joined_rows > 1):
             sorted_join_rows = joined_rows.sort_values(by=[ftypes.SpecialColumns.RPickPriority.get_col_name()])
 
@@ -323,6 +328,10 @@ def create_reports(args):
 
             res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'Many'
             res[-1][ftypes.SpecialColumns.DJoinAll.get_col_name()] = desc
+            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = (
+                ftypes.pick_types_to_bitmask([ftypes.PickType[r[ftypes.SpecialColumns.RPickType.get_col_name()]] 
+                                              for _,r in sorted_join_rows.iterrows()])
+            )
 
     #add any empty picks with no investments
     for pi in picks_df.index:
@@ -371,7 +380,7 @@ def create_reports(args):
     report_out_path = os.path.join(sub_dir,REPORT_OUT_FILE)
 
     #TODO, add rules to report:    al.create_df(rules_log)
-    reports.make_stock_report(res_pd,holdings_df,picks_df,config.currency,rules_log,report_out_path)
+    reports.make_report_workbook(res_pd,holdings_df,picks_df,config.currency,rules_log,report_out_path)
 
     print(f"Report finished! The report is located here {report_out_path}")
 
