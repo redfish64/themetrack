@@ -67,7 +67,7 @@ class PortfolioReportType(Enum):
 
 # order for categories in divi report
 # these will be added together if a stock falls in multiple categories, to give a total score, lower value is first
-PICK_TYPE_TO_SCORE_DIVI = {
+PICK_TYPE_TO_ORDER_DIVI = {
     ftypes.PickType.CapexDiviPortfolio : -16,
     ftypes.PickType.CapexTotalPortfolio : -8,
     ftypes.PickType.CapexSkeletonPortfolio : -4,
@@ -76,7 +76,7 @@ PICK_TYPE_TO_SCORE_DIVI = {
 }
 
 # order for categories in cap gains report, otherwise same as PICK_TYPE_TO_SCORE_DIVI
-PICK_TYPE_TO_SCORE_CAP_GAINS = {
+PICK_TYPE_TO_ORDER_CAP_GAINS = {
     ftypes.PickType.CapexTotalPortfolio : -16,
     ftypes.PickType.CapexSkeletonPortfolio : -8,
     ftypes.PickType.CapexDiviPortfolio : -4,
@@ -109,8 +109,7 @@ def cap_gains_row_filter(row):
         ftypes.bit_mask_has_pick_type(bm,ftypes.PickType.CapexTotalPortfolio)
         or ftypes.bit_mask_has_pick_type(bm,ftypes.PickType.CapexSkeletonPortfolio)
     )
-#TODO 2 ????????????????theme needs pickpriority because otherwise were getting the theme from big5 which may not have it.
-#also, we may consider doing the whole join twice, once for each report category? But probably not.
+
 def divi_row_filter(row):
     """Shows all divi rows and any other row with a value attached
     """
@@ -125,7 +124,7 @@ def divi_row_filter(row):
 REPORT_TYPE_TO_REPORT_INFO = { 
                                 PortfolioReportType.CapGains : PortfolioReportInfo(
                                     category_column=ftypes.SpecialColumns.RTheme,
-                                    pick_type_to_order_score=PICK_TYPE_TO_SCORE_CAP_GAINS,
+                                    pick_type_to_order_score=PICK_TYPE_TO_ORDER_CAP_GAINS,
                                     stocks_row_filter=cap_gains_row_filter,
                                     category_name="Theme",
                                     stocks_ws_title="CapGains Stocks",
@@ -133,7 +132,7 @@ REPORT_TYPE_TO_REPORT_INFO = {
                                 ),
                                 PortfolioReportType.Divi : PortfolioReportInfo(
                                     category_column=ftypes.SpecialColumns.RSector,
-                                    pick_type_to_order_score=PICK_TYPE_TO_SCORE_DIVI,
+                                    pick_type_to_order_score=PICK_TYPE_TO_ORDER_DIVI,
                                     stocks_row_filter=divi_row_filter,
                                     category_name="Sector",
                                     stocks_ws_title="Divi Stocks",
@@ -246,7 +245,7 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
         if(desc_match is not None):
             pick_types_str.append(desc_match.group(1))
 
-        pick_types = sorted(list(set([ftypes.PickType[pt] for pt in pick_types_str])),key=lambda pt: pt.name)
+        pick_types = sorted(list(set([ftypes.PickType[pt] for pt in pick_types_str])),key=lambda pt: report_info.pick_type_to_order_score[pt])
 
         short_names = [PICK_TYPE_TO_REPORT_CAT_SHORT_NAME[p] for p in pick_types]
 
@@ -322,7 +321,7 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
 
     stocks_df.sort_values(by=STOCKS_DF_SORT,inplace=True)
 
-    stocks_df.drop(columns=[REPORT_PORTFOLIO_SORT_ORDER_COLUMN])
+    stocks_df = stocks_df.drop(columns=[REPORT_PORTFOLIO_SORT_ORDER_COLUMN,ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()])
 
     category_df.sort_values(by=CATEGORY_DF_SORT,inplace=True)
 
@@ -368,6 +367,7 @@ def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFra
         add_capgains_reports_fn(writer)
         add_divi_reports_fn(writer)
 
+        add_df(holdings_df, HOLDINGS_WS_TITLE, writer, native_currency_code, always_use_generic_number_format=True)
         add_df(picks_df, PICK_WS_TITLE, writer, native_currency_code, always_use_generic_number_format=True)
         add_df(orig_joined_df, JOINED_DATA_WS_TITLE, writer, native_currency_code)
         
