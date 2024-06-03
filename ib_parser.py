@@ -40,6 +40,7 @@ def generic_parse(file):
     class IBRowType(Enum):
         Header = auto()
         Data = auto()
+        SubTotal = auto()
         Total = auto()
         Notes = auto()
 
@@ -79,6 +80,8 @@ def generic_parse(file):
                         data.append('')
 
                 table.rows.append(data)
+            elif(row_type == IBRowType.SubTotal.name):
+                pass
             elif(row_type == IBRowType.Total.name):
                 pass
             elif(row_type == IBRowType.Notes.name):
