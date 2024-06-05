@@ -160,3 +160,7 @@ def default_df_val(v,default_v):
     if(pd.isna(v)):
         return default_v
     return v
+
+
+def filter_nan_from_dict(d):
+    return {k: v for k, v in d.items() if not pd.isna(v)}

@@ -1,4 +1,5 @@
 import datetime
+from functools import partial
 import os
 import argparse
 import pathlib
@@ -303,7 +304,7 @@ def create_reports(args):
 
     join_res,match_columns = join_holdings_and_picks(holdings_df,picks_df)
 
-    #PERF: this code is probably inefficient, not a pandas expert
+    #PERF: this code is probably inefficient
     res = []
 
     for hi in holdings_df.index:
@@ -321,16 +322,28 @@ def create_reports(args):
             )
 
         elif(num_joined_rows > 1):
-            sorted_join_rows = joined_rows.sort_values(by=[ftypes.SpecialColumns.RPickPriority.get_col_name()])
+            def sort_by_priority(priority,series):
+                pn_dict = { k.name : v for k,v in priority.items()}
+                return series.map(pn_dict)            
+            
+            sorted_capex_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
+                                                             key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_CAPGAINS_PRIORITY))
+            sorted_divi_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
+                                                            key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_DIVI_PRIORITY))
 
-            res.append(sorted_join_rows.iloc[0].to_dict())
-            desc = ",".join([r[ftypes.SpecialColumns.RPickDesc.get_col_name()] for _,r in sorted_join_rows.iterrows()])
+            #TODO 3.5 this is sort of a hack. We are taking the data from the highest priority capex row and adding the data from
+            #the highest priority divi row. This is because we want the sector from the divi pick and the theme from the 
+            #capex pick. So if a row matches both capex and divi, we need both capex and divi data to display the report properly
+            join_data = util.filter_nan_from_dict(sorted_divi_join_rows.iloc[0].to_dict()) | util.filter_nan_from_dict(sorted_capex_join_rows.iloc[0].to_dict()) 
+
+            res.append(join_data)
+            desc = ",".join([r[ftypes.SpecialColumns.RPickDesc.get_col_name()] for _,r in joined_rows.iterrows()])
 
             res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'Many'
             res[-1][ftypes.SpecialColumns.DJoinAll.get_col_name()] = desc
             res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = (
                 ftypes.pick_types_to_bitmask([ftypes.PickType[r[ftypes.SpecialColumns.RPickType.get_col_name()]] 
-                                              for _,r in sorted_join_rows.iterrows()])
+                                              for _,r in joined_rows.iterrows()])
             )
 
     #add any empty picks with no investments
@@ -350,7 +363,8 @@ def create_reports(args):
         joined_rows = join_res[join_res['picks_index'] == pi]
         
         if(num_joined_rows > 1):
-            res.append(sorted_join_rows.iloc[0].to_dict())
+            res.append(joined_rows.iloc[0].to_dict()) #TODO 2 HACK, unsorted. we probably want to get rid of pickdesc entirely and
+            #replace it with CapGains/Skeleton/Income/Big5m etc.
             desc_list = sorted([r[ftypes.SpecialColumns.RPickDesc.get_col_name()] for _,r in join_res.iterrows()])
             desc = ",".join(desc_list)
 

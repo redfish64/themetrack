@@ -27,6 +27,23 @@ PICK_TYPE_TO_BIT_FLAG = {
     PickType.CapexClosed : 16,
 }
 
+PICK_TYPE_TO_CAPGAINS_PRIORITY = { 
+    PickType.CapexTotalPortfolio : 1,
+    PickType.CapexSkeletonPortfolio : 2,
+    PickType.CapexBig5 : 3,
+    PickType.CapexDiviPortfolio : 4,
+    PickType.CapexClosed : 5,
+}
+
+PICK_TYPE_TO_DIVI_PRIORITY = { 
+    PickType.CapexDiviPortfolio : 1,
+    PickType.CapexTotalPortfolio : 2,
+    PickType.CapexSkeletonPortfolio : 3,
+    PickType.CapexBig5 : 4,
+    PickType.CapexClosed : 5,
+}
+
+
 def bit_mask_has_pick_type(bm : int, pt : PickType):
      return (bm & PICK_TYPE_TO_BIT_FLAG[pt]) != 0
 
