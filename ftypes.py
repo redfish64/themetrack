@@ -74,7 +74,10 @@ class SpecialColumns(Enum):
     DBrokerage = auto(),
     DMultHoldings = auto(),
     DJoinResult = auto(),
-    DJoinAll = auto(),
+    DCapexGainsPickTypeOrder = auto(),
+    DDiviPickTypeOrder = auto(),
+    DCapexGainsPickTypeShortDesc = auto(),
+    DDiviPickTypeShortDesc = auto(),
     DJoinAllBitMask = auto(),
     DRefreshedDate = auto(),
     DCapexName = auto(),
@@ -134,41 +137,29 @@ comma separated list of picks, ex. "Region,Ticker=Region,Ticker"
 
             return DESCRIPTION[self]
 
-    
+PICK_TYPE_TO_SHORT_NAME = { 
+    PickType.CapexBig5 : "Big5",
+    PickType.CapexClosed : "Closed",
+    PickType.CapexDiviPortfolio : "Income",
+    PickType.CapexTotalPortfolio : "CapGains",
+    PickType.CapexSkeletonPortfolio : "Skeleton",
+}
 
+# order for categories in divi report
+# these will be added together if a stock falls in multiple categories, to give a total score, lower value is first
+PICK_TYPE_TO_ORDER_DIVI = {
+    PickType.CapexDiviPortfolio : -16,
+    PickType.CapexTotalPortfolio : -8,
+    PickType.CapexSkeletonPortfolio : -4,
+    PickType.CapexBig5 : -2,
+    PickType.CapexClosed : -1,
+}
 
-
-# class Region(Enum):
-#     USA = auto()
-#     Europe = auto()
-#     Asia = auto()
-
-# class PickType(Enum):
-#     CapexTotalPortfolio = auto()
-#     CapexSkeletonPortfolio = auto()
-#     CapexDiviPortfolio = auto()
-#     CapexBig5 = auto()
-#     CapexClosed = auto()
-
-# class Brokerage(Enum):
-#     InteractiveBrokers = auto()
-
-# class AssetCategory(Enum):
-#     Stock = auto()
-#     Warrant = auto()
-
-# @dataclass
-# class Asset:
-#     symbol : str
-#     name : str
-#     market : Market
-#     region : Region
-#     currency : str
-#     asset_category : AssetCategory
-
-
-# class Holding():
-#     def __init__(self,asset,other_fields : dict) -> None:
-#         self.asset = asset
-#         self.other_fields = other_fields
-
+# order for categories in cap gains report, otherwise same as PICK_TYPE_TO_SCORE_DIVI
+PICK_TYPE_TO_ORDER_CAP_GAINS = {
+    PickType.CapexTotalPortfolio : -16,
+    PickType.CapexSkeletonPortfolio : -8,
+    PickType.CapexDiviPortfolio : -4,
+    PickType.CapexBig5 : -2,
+    PickType.CapexClosed : -1,
+}

@@ -307,44 +307,65 @@ def create_reports(args):
     #PERF: this code is probably inefficient
     res = []
 
+    def get_port_desc(rows,pick_types, pt_to_order_score):
+        sorted_pick_types = sorted(pick_types,key=lambda pt: pt_to_order_score[pt])
+
+        short_types = [ftypes.PICK_TYPE_TO_SHORT_NAME[pt] for pt in sorted_pick_types]
+        return "/".join(short_types)
+            
+    def pick_types_to_sort_order_key(pt_list, pt_to_order_score):
+        score = 0
+
+        for pt in pt_list:
+            score = min(score,pt_to_order_score[pt])
+
+        return score
+    
     for hi in holdings_df.index:
         joined_rows = join_res[join_res['holdings_index'] == hi]
         num_joined_rows = len(joined_rows)
         if(num_joined_rows == 0):
             res.append(holdings_df.loc[hi].to_dict())
             res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'None'
-        elif(num_joined_rows == 1):
-            res.append(joined_rows.iloc[0].to_dict())
-            res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = '1:1'
-            res[-1][ftypes.SpecialColumns.DJoinAll.get_col_name()] = res[-1][ftypes.SpecialColumns.RPickDesc.get_col_name()]
+        elif(num_joined_rows >= 1):
+
+            if(num_joined_rows == 1):
+                res.append(joined_rows.iloc[0].to_dict())
+                res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = '1:1'
+
+            elif(num_joined_rows > 1):
+                def sort_by_priority(priority,series):
+                    pn_dict = { k.name : v for k,v in priority.items()}
+                    return series.map(pn_dict)            
+                
+                sorted_capex_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
+                                                                key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_CAPGAINS_PRIORITY))
+                sorted_divi_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
+                                                                key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_DIVI_PRIORITY))
+
+                #TODO 3.5 this is sort of a hack. We are taking the data from the highest priority capex row and adding the data from
+                #the highest priority divi row. This is because we want the sector from the divi pick and the theme from the 
+                #capex pick. So if a row matches both capex and divi, we need both capex and divi data to display the report properly
+                join_data = util.filter_nan_from_dict(sorted_divi_join_rows.iloc[0].to_dict()) | util.filter_nan_from_dict(sorted_capex_join_rows.iloc[0].to_dict()) 
+
+                res.append(join_data)
+                res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'Many'
+
+            pick_types = list(set([ftypes.PickType[r[ftypes.SpecialColumns.RPickType.get_col_name()]] 
+                                            for _,r in joined_rows.iterrows()]))
+
+            res[-1][ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc.get_col_name()] = get_port_desc(sorted_capex_join_rows,pick_types,ftypes.PICK_TYPE_TO_ORDER_CAP_GAINS)
+            res[-1][ftypes.SpecialColumns.DDiviPickTypeShortDesc.get_col_name()] = get_port_desc(sorted_divi_join_rows,pick_types,ftypes.PICK_TYPE_TO_ORDER_DIVI)
+
+            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = ftypes.pick_types_to_bitmask(pick_types)
+            res[-1][ftypes.SpecialColumns.DCapexGainsPickTypeOrder.get_col_name()] = pick_types_to_sort_order_key(pick_types,ftypes.PICK_TYPE_TO_ORDER_CAP_GAINS)
+            res[-1][ftypes.SpecialColumns.DDiviPickTypeOrder.get_col_name()] = pick_types_to_sort_order_key(pick_types,ftypes.PICK_TYPE_TO_ORDER_DIVI)
+
             res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = (
-                ftypes.pick_types_to_bitmask([ftypes.PickType[res[-1][ftypes.SpecialColumns.RPickType.get_col_name()]]])
+                ftypes.pick_types_to_bitmask(pick_types)
             )
+    
 
-        elif(num_joined_rows > 1):
-            def sort_by_priority(priority,series):
-                pn_dict = { k.name : v for k,v in priority.items()}
-                return series.map(pn_dict)            
-            
-            sorted_capex_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
-                                                             key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_CAPGAINS_PRIORITY))
-            sorted_divi_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
-                                                            key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_DIVI_PRIORITY))
-
-            #TODO 3.5 this is sort of a hack. We are taking the data from the highest priority capex row and adding the data from
-            #the highest priority divi row. This is because we want the sector from the divi pick and the theme from the 
-            #capex pick. So if a row matches both capex and divi, we need both capex and divi data to display the report properly
-            join_data = util.filter_nan_from_dict(sorted_divi_join_rows.iloc[0].to_dict()) | util.filter_nan_from_dict(sorted_capex_join_rows.iloc[0].to_dict()) 
-
-            res.append(join_data)
-            desc = ",".join([r[ftypes.SpecialColumns.RPickDesc.get_col_name()] for _,r in joined_rows.iterrows()])
-
-            res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'Many'
-            res[-1][ftypes.SpecialColumns.DJoinAll.get_col_name()] = desc
-            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = (
-                ftypes.pick_types_to_bitmask([ftypes.PickType[r[ftypes.SpecialColumns.RPickType.get_col_name()]] 
-                                              for _,r in joined_rows.iterrows()])
-            )
 
     #add any empty picks with no investments
     for pi in picks_df.index:

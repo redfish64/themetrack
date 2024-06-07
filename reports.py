@@ -65,40 +65,25 @@ class PortfolioReportType(Enum):
      CapGains = auto(),
      Divi = auto(),
 
-# order for categories in divi report
-# these will be added together if a stock falls in multiple categories, to give a total score, lower value is first
-PICK_TYPE_TO_ORDER_DIVI = {
-    ftypes.PickType.CapexDiviPortfolio : -16,
-    ftypes.PickType.CapexTotalPortfolio : -8,
-    ftypes.PickType.CapexSkeletonPortfolio : -4,
-    ftypes.PickType.CapexBig5 : -2,
-    ftypes.PickType.CapexClosed : -1,
-}
-
-# order for categories in cap gains report, otherwise same as PICK_TYPE_TO_SCORE_DIVI
-PICK_TYPE_TO_ORDER_CAP_GAINS = {
-    ftypes.PickType.CapexTotalPortfolio : -16,
-    ftypes.PickType.CapexSkeletonPortfolio : -8,
-    ftypes.PickType.CapexDiviPortfolio : -4,
-    ftypes.PickType.CapexBig5 : -2,
-    ftypes.PickType.CapexClosed : -1,
-}
 @dataclass
 class PortfolioReportInfo:
     """Information used by reports for each type of report
     """
     category_column : ftypes.SpecialColumns
-    pick_type_to_order_score : dict[ftypes.PickType : int]
+    pick_type_order_col : ftypes.SpecialColumns
     stocks_row_filter : Callable[[Any],bool]
     category_name : str #name of category in reports
     stocks_ws_title : str #title of stocks report worksheet
     cat_ws_title : str #title of category report worksheet
+    pick_type_short_name_col : ftypes.SpecialColumns
 
 
 #TODO 2.5 remove pick priority stuff, since pick priority now depends on the report 
 
 def cap_gains_row_filter(row):
-    """Shows all capgain and skeleton rows and any other row with a value attached
+    """Shows all capgain and skeleton rows and any other row with a value attached. The idea here is that
+    we want to show investments in non capex stocks, but we don't want to show rows for all the
+    non-capex stock picks.
     """
     val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
     if val != 0.0 and not pd.isna(val):
@@ -111,7 +96,9 @@ def cap_gains_row_filter(row):
     )
 
 def divi_row_filter(row):
-    """Shows all divi rows and any other row with a value attached
+    """Shows all divi rows and any other row with a value attached. The idea here is that
+    we want to show investments in non divi stocks, but we don't want to show rows for all the
+    non-divi stock picks.
     """
     val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
     if val != 0.0 and not pd.isna(val):
@@ -124,28 +111,23 @@ def divi_row_filter(row):
 REPORT_TYPE_TO_REPORT_INFO = { 
                                 PortfolioReportType.CapGains : PortfolioReportInfo(
                                     category_column=ftypes.SpecialColumns.RTheme,
-                                    pick_type_to_order_score=PICK_TYPE_TO_ORDER_CAP_GAINS,
                                     stocks_row_filter=cap_gains_row_filter,
+                                    pick_type_order_col=ftypes.SpecialColumns.DCapexGainsPickTypeOrder,
                                     category_name="Theme",
                                     stocks_ws_title="CapGains Stocks",
                                     cat_ws_title="CapGains Themes",
+                                    pick_type_short_name_col=ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc,
                                 ),
                                 PortfolioReportType.Divi : PortfolioReportInfo(
                                     category_column=ftypes.SpecialColumns.RSector,
-                                    pick_type_to_order_score=PICK_TYPE_TO_ORDER_DIVI,
                                     stocks_row_filter=divi_row_filter,
+                                    pick_type_order_col=ftypes.SpecialColumns.DDiviPickTypeOrder,
                                     category_name="Sector",
                                     stocks_ws_title="Divi Stocks",
                                     cat_ws_title="Divi Themes",
+                                    pick_type_short_name_col=ftypes.SpecialColumns.DDiviPickTypeShortDesc,
                                 ),
                                 }
-
-#this is a column we add only for reporting. It cannot be accessed during data generation, so we don't create a 
-#ftypes.SpecialColumns entry for it
-REPORT_PORTFOLIO_COLUMN = "ReportCat"
-
-#how to sort the report categories
-REPORT_PORTFOLIO_SORT_ORDER_COLUMN = "ReportCatSort"
 
 
 header_font = Font(bold=True, italic=True)
@@ -159,7 +141,8 @@ GENERIC_EXCEL_TYPE = ("@",generic_len)
 
 def col_to_excel_type(col_name : str, native_currency_code : str):
     return ({
-        REPORT_PORTFOLIO_COLUMN : ("@",len),
+        ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc : ("@",len),
+        ftypes.SpecialColumns.DDiviPickTypeShortDesc : ("@",len),
         ftypes.SpecialColumns.RCurrValue.get_col_name() : get_currency_format(native_currency_code),
         ftypes.SpecialColumns.RExchange.get_col_name() : ("@",len),
         ftypes.SpecialColumns.RTicker.get_col_name() : ("@",len),
@@ -213,7 +196,8 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
     report_info = REPORT_TYPE_TO_REPORT_INFO[report_type]
 
     COL_TO_REPORT_NAME = {
-        REPORT_PORTFOLIO_COLUMN : "Portfolio(s)",
+        ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc : "Portfolio(s)",
+        ftypes.SpecialColumns.DDiviPickTypeShortDesc : "Portfolio(s)",
         ftypes.SpecialColumns.RCurrValue.get_col_name() : f"Value {native_currency_code}",
         ftypes.SpecialColumns.RExchange.get_col_name() : "Exchange",
         ftypes.SpecialColumns.RTicker.get_col_name() : "Ticker",
@@ -223,38 +207,6 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
         ftypes.SpecialColumns.RTotalPerc.get_col_name() : "% of Total",
     }
 
-    def pick_types_to_sort_order_key(pt_list):
-        score = 0
-
-        for pt in pt_list:
-            score += report_info.pick_type_to_order_score[pt]
-
-        return score
-    
-    #create report_category_column and report category sort order column (for sorting)
-    def set_report_cat_and_sort_order(row):
-        val = row[ftypes.SpecialColumns.DJoinAll.get_col_name()]
-        if(pd.isna(val)):
-            val = ''
-        pick_types_str = re.findall(r',?(.*?):[^,]*',val)
-
-        desc = row[ftypes.SpecialColumns.RPickDesc.get_col_name()]
-        if(pd.isna(desc)):
-            desc = ''
-        desc_match = re.fullmatch(r'(.*?):.*',desc)
-        if(desc_match is not None):
-            pick_types_str.append(desc_match.group(1))
-
-        pick_types = sorted(list(set([ftypes.PickType[pt] for pt in pick_types_str])),key=lambda pt: report_info.pick_type_to_order_score[pt])
-
-        short_names = [PICK_TYPE_TO_REPORT_CAT_SHORT_NAME[p] for p in pick_types]
-
-        row[REPORT_PORTFOLIO_COLUMN] = "/".join(short_names)
-        row[REPORT_PORTFOLIO_SORT_ORDER_COLUMN] = pick_types_to_sort_order_key(pick_types)
-
-        return row
-
-    joined_df = joined_df.apply(set_report_cat_and_sort_order,axis=1)
 
     total_sum = joined_df[ftypes.SpecialColumns.RCurrValue.get_col_name()].sum()
 
@@ -270,7 +222,7 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
     
     STOCKS_DF_SORT = [
         report_info.category_column.get_col_name(),
-        REPORT_PORTFOLIO_SORT_ORDER_COLUMN,
+        report_info.pick_type_order_col.get_col_name(),
         ftypes.SpecialColumns.RTicker.get_col_name(),
         ftypes.SpecialColumns.RExchange.get_col_name(),
     ]
@@ -281,8 +233,8 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
     
     stocks_df = joined_df[[
         report_info.category_column.get_col_name(),
-        REPORT_PORTFOLIO_COLUMN,
-        REPORT_PORTFOLIO_SORT_ORDER_COLUMN,
+        ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc.get_col_name(),
+        report_info.pick_type_order_col.get_col_name(),
         ftypes.SpecialColumns.DJoinAllBitMask.get_col_name(),
         ftypes.SpecialColumns.RExchange.get_col_name(),
         ftypes.SpecialColumns.RTicker.get_col_name(),
@@ -321,7 +273,7 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
 
     stocks_df.sort_values(by=STOCKS_DF_SORT,inplace=True)
 
-    stocks_df = stocks_df.drop(columns=[REPORT_PORTFOLIO_SORT_ORDER_COLUMN,ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()])
+    stocks_df = stocks_df.drop(columns=[report_info.pick_type_order_col.get_col_name(),ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()])
 
     category_df.sort_values(by=CATEGORY_DF_SORT,inplace=True)
 
@@ -336,16 +288,6 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
 
     return add_reports
 
-
-#TODO 2.5 get rid of pick priority. We will have different priorities based on whether a divi or cap gains report
-
-PICK_TYPE_TO_REPORT_CAT_SHORT_NAME = { 
-    ftypes.PickType.CapexBig5 : "Big5",
-    ftypes.PickType.CapexClosed : "Closed",
-    ftypes.PickType.CapexDiviPortfolio : "Income",
-    ftypes.PickType.CapexTotalPortfolio : "CapGains",
-    ftypes.PickType.CapexSkeletonPortfolio : "Skeleton",
-}
 
 
 def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame, native_currency_code : str, 
