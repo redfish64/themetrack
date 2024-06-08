@@ -6,7 +6,6 @@ from numpy import NaN
 import openpyxl as op
 import sys
 
-from sympy import false
 
 import util
 import ftypes
@@ -117,7 +116,7 @@ class OverrideRule:
         m = re.match(r"m:(.*,.*)",repl_value)
         if(m):
             mult_values = m.group(1).split(",")
-            repl_value = f"r:{"|".join(mult_values)}"
+            repl_value = f"r:{'|'.join(mult_values)}"
 
         self.replacements.append((ri,repl_name,repl_value))
 

@@ -104,9 +104,9 @@ class SpecialColumns(Enum):
     def get_col_desc(self):
             #columns that are either read from or populated by the finance app
             DESCRIPTION = {
-                SpecialColumns.DBrokerage: f"brokerage security is held at, populated by finance app, one of {",".join(BrokerageTypes._member_names_)}",
+                SpecialColumns.DBrokerage: f"brokerage security is held at, populated by finance app, one of {','.join(BrokerageTypes._member_names_)}",
                 SpecialColumns.RPickType: f"type of pick, capex big5, capex total portfolio, etc., one of "
-                            f"{",".join([x.name for x in CAPEX_FILENAME_TO_PICK_TYPE.values()])}, populated by finance app",
+                            f"{','.join([x.name for x in CAPEX_FILENAME_TO_PICK_TYPE.values()])}, populated by finance app",
                 SpecialColumns.RPickPriority: """
 ThemePriority is used when there are multiple matches 
 for a held security. The one with the lower ThemePriority 
