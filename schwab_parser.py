@@ -4,6 +4,8 @@ import datetime
 import sys
 
 import util
+from util import skip_blank_lines,verify_header,read_data
+
 import ftypes
 import re
 import pandas as pd
@@ -15,6 +17,9 @@ SCHWAB_NUMERIC_HEADERS = ['Quantity', 'Price', 'Price Change %',
        'Price Change $', 'Market Value', 'Day Change %', 'Day Change $',
        'Cost Basis', 'Gain/Loss %', 'Gain/Loss $', '% Of Account']
 
+
+
+
 def parse_file(fp : str):
     fi = enumerate(util.extend_all_row_length(util.read_standardized_csv(fp),min_len=17))
     (ri,row) = next(fi)
@@ -22,56 +27,6 @@ def parse_file(fp : str):
     #first parse the date
     #Positions for CUSTACCS as of 02:07 AM ET, 04/03/2024
     (mm,dd,yyyy) = util.csv_assert_match(r'Positions for .*? as of .*, (\d\d)/(\d\d)/(\d\d\d\d)$', ri,0,row,"Can't parse date on first row")
-
-    def skip_blank_lines(ri_row_enum) -> tuple[int, str]:
-        """Will skip blanks rows until it finds one that has data. Any element that consists of empty string ('') is considered blank
-
-        Args:
-            ri_row_enum (iter[int,str]): an enum of tuples containing (row_index,row)
-
-        Returns:
-            (int,list[str]): (row_index,row) of first non-empty row, or (row_index,None) of final line, if reached EOF
-        """
-        row_index = 0
-
-        for row_index, row in ri_row_enum:
-            # Check if the row is non-empty (contains at least one non-empty string)
-            if any(cell != '' for cell in row):
-                return (row_index, row)
-        
-        # If no non-empty row was found, return last index with None
-        return (row_index, None)
-
-    def verify_header(ri,row : list[str],headers : list[str]):
-        """Verifies that row matches the given header names or errors out
-        """
-        if(len(row) < len(headers) or row[0:len(headers)] != headers):
-            util.csv_error(row,ri,len(row),f"Row doesn't match header, {','.join(headers)}")
-
-    def read_data(ri_row_enum,*extra_constant_values):
-        """reads a row from the enum. If it is not completely blank, and not at EOF, adds it to a list. 
-           On blank, EOF, returns the resulting list. extra_constant_values are appended to every row 
-
-        Args:
-           ri_row_enum (_type_): an enum of tuples containing (row_index,row)
-
-        Returns:
-            _type_: Resulting list of data
-        """
-        row_index = 0
-
-        data_list = []
-
-        extra_constant_values = list(extra_constant_values)
-
-        for row_index, row in ri_row_enum:
-            # Check if the row is non-empty (contains at least one non-empty string)
-            if all(cell == '' for cell in row):
-                return (data_list,False)
-            
-            data_list.append(row + extra_constant_values)
-
-        return (data_list,True)
 
 
     all_rows = []

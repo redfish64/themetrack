@@ -291,7 +291,7 @@ def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.Dat
 
 
 def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame, native_currency_code : str, 
-                         rules_log : al.Log, output_file : str) -> pd.DataFrame:
+                         rules_log : al.Log, config : ftypes.Config,output_file : str) -> pd.DataFrame:
     
     #PERF, this table is pretty large, but we don't want to go mucking with it here and then use it for something else later
     joined_df = orig_joined_df.copy()

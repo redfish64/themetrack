@@ -172,14 +172,15 @@ def create_snapshot(args):
         print(f"Creating snapshot at {dir}")
 
         #find the best theme_track_config file to use
-        theme_track_config_src = None
+        theme_track_config_src_dir = None
 
-        get_latest_valid_snapshot_dir(args.main_dir)
+        theme_track_config_src_dir = get_latest_valid_snapshot_dir(args.main_dir)
 
         #if not present use default one hardcoded into program
-        if(theme_track_config_src is None):
+        if(theme_track_config_src_dir is None):
             theme_track_config_src = get_datafile(ftypes.THEME_TRACK_CONFIG_FILE)
-
+        else:
+            theme_track_config_src = os.path.join(theme_track_config_src_dir,ftypes.THEME_TRACK_CONFIG_FILE)
         os.makedirs(dir, exist_ok=True)
         shutil.copyfile(theme_track_config_src,theme_track_config_dest)
 
@@ -282,6 +283,14 @@ def create_reports(args):
         else:
             util.warn(f"skipping dir {item_path}")
 
+    if(picks_df.empty):
+        util.error(f"Capex files have not been downloaded, please run (cmd) {DOWNLOAD_CAPEX_COMMAND}")
+    if(holdings_df.empty):
+        util.error("There are no brokerage reports that could be processed. Please download them and put them in {sub_dir}")
+
+    if(config_file is None):
+        util.error(f'There is no {ftypes.THEME_TRACK_CONFIG_FILE} in {sub_dir}. Please run (cmd) {CREATE_SNAPSHOT_COMMAND}')
+
     if(args.rules_log is not None):
         holdings_id = int(args.rules_log)
 
@@ -293,14 +302,6 @@ def create_reports(args):
         rules_parser.run_rules(system_overrides,user_overrides,holdings_df,rules_log)
     with al.add_log_context(rules_log,{"df": "picks"}):
         rules_parser.run_rules(system_overrides,user_overrides,picks_df,rules_log)
-
-    if(picks_df.empty):
-        util.error(f"Capex files have not been downloaded, please run (cmd) {DOWNLOAD_CAPEX_COMMAND}")
-    if(holdings_df.empty):
-        util.error("There are no brokerage reports that could be processed. Please download them and put them in {sub_dir}")
-
-    if(config_file is None):
-        util.error(f'There is no {ftypes.THEME_TRACK_CONFIG_FILE} in {sub_dir}. Please run (cmd) {CREATE_SNAPSHOT_COMMAND}')
 
     join_res,match_columns = join_holdings_and_picks(holdings_df,picks_df)
 
@@ -415,7 +416,7 @@ def create_reports(args):
     report_out_path = os.path.join(sub_dir,REPORT_OUT_FILE)
 
     #TODO, add rules to report:    al.create_df(rules_log)
-    reports.make_report_workbook(res_pd,holdings_df,picks_df,config.currency,rules_log,report_out_path)
+    reports.make_report_workbook(res_pd,holdings_df,picks_df,config.currency,rules_log,config,report_out_path)
 
     print(f"Report finished! The report is located here {report_out_path}")
 

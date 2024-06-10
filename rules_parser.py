@@ -8,24 +8,11 @@ import sys
 
 
 import util
+from util import row_matches
 import ftypes
 import re
 import pandas as pd
 import array_log as al
-
-def row_matches(r1,r2):
-    """Returns true if rows match. If one row is longer than the other, then items in the longer
-       row will be matched against ''.
-    """
-    m = max(len(r1),len(r2))
-    for i in range(0,m):
-        c1 = r1[i] if i < len(r1) else ''
-        c2 = r2[i] if i < len(r2) else ''
-        if(c1 == c2):
-            continue
-
-        return False
-    return True
 
 
 

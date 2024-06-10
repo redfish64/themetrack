@@ -89,7 +89,8 @@ def read_standardized_csv(fp : str = None,wb = None, worksheet_name=None):
           wb - excel workbook
           worksheet_name - if reading from a workbook, then the worksheet number to read.
                            Default is the first page
-
+        Returns:
+          iteration of lists where each list is a row
     """
     def remove_trailing_empty_cells(r):
         for i in range(len(r)-1,-1,-1):
@@ -164,3 +165,76 @@ def default_df_val(v,default_v):
 
 def filter_nan_from_dict(d):
     return {k: v for k, v in d.items() if not pd.isna(v)}
+
+def row_matches(r1,r2):
+    """Returns true if rows match. If one row is longer than the other, then items in the longer
+       row will be matched against ''.
+    """
+    m = max(len(r1),len(r2))
+    for i in range(0,m):
+        c1 = r1[i] if i < len(r1) else ''
+        c2 = r2[i] if i < len(r2) else ''
+        if(c1 == c2):
+            continue
+
+        return False
+    return True
+
+def csv_assert_row_matches(row_index, row, match_row):
+    """Matches row against match_row. If doesn't match, errors out
+    """
+    if(row_matches(row,match_row)):
+        return
+    
+    csv_error(row,row_index,0,f"Must match {match_row}")
+
+def skip_blank_lines(ri_row_enum) -> tuple[int, str]:
+    """Will skip blanks rows until it finds one that has data. Any element that consists of empty string ('') is considered blank
+
+    Args:
+        ri_row_enum (iter[int,str]): an enum of tuples containing (row_index,row)
+
+    Returns:
+        (int,list[str]): (row_index,row) of first non-empty row, or (row_index,None) of final line, if reached EOF
+    """
+    row_index = 0
+
+    for row_index, row in ri_row_enum:
+        # Check if the row is non-empty (contains at least one non-empty string)
+        if any(cell != '' for cell in row):
+            return (row_index, row)
+    
+    # If no non-empty row was found, return last index with None
+    return (row_index, None)
+
+def verify_header(ri,row : list[str],headers : list[str]):
+    """Verifies that row matches the given header names or errors out
+    """
+    if(len(row) < len(headers) or row[0:len(headers)] != headers):
+        csv_error(row,ri,len(row),f"Row doesn't match header, {','.join(headers)}")
+
+def read_data(ri_row_enum,*extra_constant_values):
+    """reads rows from the enum util the next row is completely blank, or at EOF.  
+    Returns the resulting list. extra_constant_values are appended to every row 
+
+    Args:
+        ri_row_enum (_type_): an enum of tuples containing (row_index,row)
+
+    Returns:
+        list,bool: Resulting list of data and a boolean indicating if at EOF
+    """
+    row_index = 0
+
+    data_list = []
+
+    extra_constant_values = list(extra_constant_values)
+
+    for row_index, row in ri_row_enum:
+        # Check if the row is non-empty (contains at least one non-empty string)
+        if all(cell == '' for cell in row):
+            return (data_list,False)
+        
+        data_list.append(row + extra_constant_values)
+
+    return (data_list,True)
+

@@ -163,3 +163,16 @@ PICK_TYPE_TO_ORDER_CAP_GAINS = {
     PickType.CapexBig5 : -2,
     PickType.CapexClosed : -1,
 }
+
+@dataclass
+class ReportConfig:
+    columns : dict [str,(str,str)] #column name to display_as and excel_format
+
+@dataclass
+class Config:
+    currency : str
+    capex_stocks_report : ReportConfig
+    capex_theme_report : ReportConfig
+    divi_stocks_report : ReportConfig
+    divi_theme_report : ReportConfig
+    currency_formats : dict[str,str] # currency to excel format
