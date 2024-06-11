@@ -166,13 +166,16 @@ PICK_TYPE_TO_ORDER_CAP_GAINS = {
 
 @dataclass
 class ReportConfig:
+    name : str
     columns : dict [str,(str,str)] #column name to display_as and excel_format
+
+@dataclass 
+class ThemeReportConfig(ReportConfig):
+    cat_column : str #category column used to combine rows
+
 
 @dataclass
 class Config:
     currency : str
-    capex_stocks_report : ReportConfig
-    capex_theme_report : ReportConfig
-    divi_stocks_report : ReportConfig
-    divi_theme_report : ReportConfig
+    reports : list[ReportConfig]
     currency_formats : dict[str,str] # currency to excel format

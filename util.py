@@ -221,20 +221,23 @@ def read_data(ri_row_enum,*extra_constant_values):
         ri_row_enum (_type_): an enum of tuples containing (row_index,row)
 
     Returns:
-        list,bool: Resulting list of data and a boolean indicating if at EOF
+        list,bool,int: Resulting list of data, a boolean indicating if at EOF, and the
+                       row index of the first row
     """
-    row_index = 0
+    first_row_index = None
 
     data_list = []
 
     extra_constant_values = list(extra_constant_values)
 
     for row_index, row in ri_row_enum:
+        if(first_row_index is None):
+            first_row_index = row_index
         # Check if the row is non-empty (contains at least one non-empty string)
         if all(cell == '' for cell in row):
-            return (data_list,False)
+            return (data_list,False,first_row_index)
         
         data_list.append(row + extra_constant_values)
 
-    return (data_list,True)
+    return (data_list,True,first_row_index)
 

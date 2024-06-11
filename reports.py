@@ -189,7 +189,7 @@ def add_df(df,title,writer,native_currency_code,orig_cols=None,always_use_generi
     update_number_formats(orig_cols,ws,df.shape[0],native_currency_code,always_use_generic=always_use_generic_number_format)
 
 
-def make_portfolio_reports(report_type : PortfolioReportType, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, 
+def make_portfolio_reports(config : ftypes.Config, report_type : PortfolioReportType, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, 
                            picks_df : pd.DataFrame, native_currency_code : str,
                           ):
 
@@ -301,8 +301,8 @@ def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFra
 
     #make_portfolio_reports returns a function here because debugging while within a "with pd.ExcelWriter..." is a pain,
     #so we minimize the amount of code inside it
-    add_capgains_reports_fn = make_portfolio_reports(PortfolioReportType.CapGains,joined_df,holdings_df,picks_df,native_currency_code)
-    add_divi_reports_fn = make_portfolio_reports(PortfolioReportType.Divi,joined_df,holdings_df,picks_df,native_currency_code)
+    add_capgains_reports_fn = make_portfolio_reports(config, PortfolioReportType.CapGains,joined_df,holdings_df,picks_df,native_currency_code)
+    add_divi_reports_fn = make_portfolio_reports(config, PortfolioReportType.Divi,joined_df,holdings_df,picks_df,native_currency_code)
     
     # Export to Excel
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:

@@ -42,7 +42,7 @@ def parse_file(fp : str):
 
         verify_header(ri,row,SCHWAB_HEADERS)
 
-        (curr_table_rows,at_eof) = read_data(fi,acct_name)
+        (curr_table_rows,at_eof,ri) = read_data(fi,acct_name)
 
         util.csv_assert(curr_table_rows[-2][0] == 'Cash & Cash Investments',row,ri-2,0,util.ErrorType.Error,"Table second to last row must be 'Cash & Cash Investments'")
         util.csv_assert(curr_table_rows[-1][0] == 'Account Total',row,ri-1,0,util.ErrorType.Error,"Table must end with 'Account Total'")
