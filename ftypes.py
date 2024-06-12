@@ -145,6 +145,8 @@ PICK_TYPE_TO_SHORT_NAME = {
     PickType.CapexSkeletonPortfolio : "Skeleton",
 }
 
+SHORT_NAME_TO_PICK_TYPE = {v: k for k,v in PICK_TYPE_TO_SHORT_NAME.items()}
+
 # order for categories in divi report
 # these will be added together if a stock falls in multiple categories, to give a total score, lower value is first
 PICK_TYPE_TO_ORDER_DIVI = {
@@ -167,6 +169,7 @@ PICK_TYPE_TO_ORDER_CAP_GAINS = {
 @dataclass
 class ReportConfig:
     name : str
+    always_show_pick_bitmask : int # bitmask of pick types to always show rows for, even if zero funds are invested 
     columns : dict [str,(str,str)] #column name to display_as and excel_format
 
 @dataclass 

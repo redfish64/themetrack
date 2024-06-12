@@ -52,12 +52,23 @@ def parse_report_columns(rows,row_index):
 
     return cols
 
+def parse_always_show_pick(rows,base_ri):
+    total_bf = 0
+
+    for row_ri,row in enumerate(rows):
+        if(row[0] not in ftypes.SHORT_NAME_TO_PICK_TYPE):
+            util.csv_error(row,base_ri + row_ri,1,f"Pick type must be one of {",".join(ftypes.SHORT_NAME_TO_PICK_TYPE.keys())}")
+        bf = ftypes.PICK_TYPE_TO_BIT_FLAG[ftypes.SHORT_NAME_TO_PICK_TYPE[row[0]]]
+        total_bf = (total_bf | bf)
+
+    return total_bf
 
 def parse_theme_report(fi):
-    tr = ftypes.ThemeReportConfig(name=None,columns=None,cat_column=None)
+    tr = ftypes.ThemeReportConfig(name=None,columns=None,cat_column=None,always_show_pick_bitmask=0)
     x = { 
         "Name" : (True,lambda rows,row_index : setattr(tr,'name',rows[0][0])),
         "Category" : (True,lambda rows,row_index : setattr(tr,'cat_column',rows[0][0])),
+        "AlwaysShowPickCategories" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
         "Columns" : (True,lambda rows,row_index : setattr(tr,'columns',parse_report_columns(rows,row_index))),
     }
     parse_option_group(fi,x)
@@ -65,9 +76,10 @@ def parse_theme_report(fi):
     return tr
 
 def parse_securities_report(fi):
-    tr = ftypes.ReportConfig(name=None,columns=None)
+    tr = ftypes.ReportConfig(name=None,columns=None,always_show_pick_bitmask=0)
     x = { 
         "Name" : (True,lambda rows,row_index : setattr(tr,'name',rows[0][0])),
+        "AlwaysShowPickCategories" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
         "Columns" : (True,lambda rows,row_index : setattr(tr,'columns',parse_report_columns(rows,row_index))),
     }
     parse_option_group(fi,x)
