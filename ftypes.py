@@ -170,11 +170,11 @@ PICK_TYPE_TO_ORDER_CAP_GAINS = {
 class ReportConfig:
     name : str
     always_show_pick_bitmask : int # bitmask of pick types to always show rows for, even if zero funds are invested 
-    columns : dict [str,(str,str)] #column name to display_as and excel_format
-
-@dataclass 
-class ThemeReportConfig(ReportConfig):
+    columns : list [(str,str,str)] #column name, display_as, excel_format
+    column_order : list [str] #columns to order the rows by
     cat_column : str #category column used to combine rows
+    is_cat_type : bool
+
 
 
 @dataclass

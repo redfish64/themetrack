@@ -155,9 +155,32 @@ def col_to_excel_type(col_name : str, native_currency_code : str):
     }).get(col_name,GENERIC_EXCEL_TYPE)
 
 
+def calc_max_len(format_code, value):
+    # Extract prefix from the format code
+    prefix_match = re.match(r'\"([^\"]+)\"', format_code)
+    prefix = prefix_match.group(1) if prefix_match else ''
 
+    # Check if the format is for percentage
+    if re.match(r'0\.0+%', format_code):
+        # Percentage format
+        decimal_places = format_code.count('0') - 2
+        formatted_value = f"{value * 100:.{decimal_places}f}%"
+    elif re.match(r'\"\D*\"#,##0\.00', format_code):
+        # Currency format with any prefix
+        formatted_value = f"{prefix}{value:,.2f}"
+    elif format_code == '@':
+        # General text format
+        formatted_value = str(value)
+    else:
+        # General numeric format
+        decimal_places = format_code.count('0')
+        formatted_value = f"{value:,.{decimal_places}f}"
 
-def update_number_formats(orig_cols,ws,num_rows,native_currency_code,always_use_generic=False):
+        #TODO 3 this function isn't perfect, but it handles common formats. Otherwise it falls back to this generic clause where we add 2 for some slop
+        return len(formatted_value) + 2 
+    return len(formatted_value)
+
+def update_number_formats(excel_formats,ws,num_rows,native_currency_code):
     """Updates the style of the cell according to the column type, so percentages look like %0.01,
         money looks like $1,000,000,000.00 etc.
 
@@ -165,48 +188,24 @@ def update_number_formats(orig_cols,ws,num_rows,native_currency_code,always_use_
         actually talking to excel
 
     Args:
-        orig_cols (_type_): Original names of columns from ftypes.SpecialColumns
+        excel_formats (_type_): excel format for each row
         ws (_type_): worksheet to modify
         num_rows (_type_): number of rows to modify (after the header)
     """
-    for (oc,col) in zip(list(orig_cols),ws.iter_cols()):
-        excel_type,max_len_fn = GENERIC_EXCEL_TYPE if always_use_generic else col_to_excel_type(oc, native_currency_code)
+    for (excel_format,col) in zip(excel_formats,ws.iter_cols()):
         max_len = len(col[0].value)
         for cell in col[1:num_rows+1]:
-            cell.number_format = excel_type
-            max_len = max(max_len_fn(cell.value),max_len)
+            cell.number_format = excel_format
+            max_len = max(calc_max_len(excel_format, cell.value),max_len)
 
         adjusted_width = (max_len + 2) * 1.2
         ws.column_dimensions[col[0].column_letter].width = adjusted_width      
 
 
-def add_df(df,title,writer,native_currency_code,orig_cols=None,always_use_generic_number_format=False):
-    if(orig_cols is None):
-        orig_cols = list(df.columns)
-    df.to_excel(writer, index=False, sheet_name=title)
-    ws = writer.sheets[title]
-    style_report_ws(ws)
-    update_number_formats(orig_cols,ws,df.shape[0],native_currency_code,always_use_generic=always_use_generic_number_format)
 
-
-def make_portfolio_reports(config : ftypes.Config, report_type : PortfolioReportType, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, 
-                           picks_df : pd.DataFrame, native_currency_code : str,
+def make_portfolio_reports(config : ftypes.Config, report_config : ftypes.ReportConfig, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, 
+                           picks_df : pd.DataFrame, native_currency_code : str
                           ):
-
-    report_info = REPORT_TYPE_TO_REPORT_INFO[report_type]
-
-    COL_TO_REPORT_NAME = {
-        ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc : "Portfolio(s)",
-        ftypes.SpecialColumns.DDiviPickTypeShortDesc : "Portfolio(s)",
-        ftypes.SpecialColumns.RCurrValue.get_col_name() : f"Value {native_currency_code}",
-        ftypes.SpecialColumns.RExchange.get_col_name() : "Exchange",
-        ftypes.SpecialColumns.RTicker.get_col_name() : "Ticker",
-        ftypes.SpecialColumns.RSector.get_col_name() : "Sector",
-        ftypes.SpecialColumns.RTheme.get_col_name() : "Theme",
-        ftypes.SpecialColumns.RCatPerc.get_col_name() : f"% of {report_info.category_name}",
-        ftypes.SpecialColumns.RTotalPerc.get_col_name() : "% of Total",
-    }
-
 
     total_sum = joined_df[ftypes.SpecialColumns.RCurrValue.get_col_name()].sum()
 
@@ -216,78 +215,66 @@ def make_portfolio_reports(config : ftypes.Config, report_type : PortfolioReport
         return val/total_sum
     
     category_df = pd.pivot_table(joined_df, values=ftypes.SpecialColumns.RCurrValue.get_col_name(), 
-                                    index=[report_info.category_column.get_col_name()],
+                                    index=[report_config.cat_column],
                                     aggfunc="sum", fill_value=0).copy()
     category_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
     
-    STOCKS_DF_SORT = [
-        report_info.category_column.get_col_name(),
-        report_info.pick_type_order_col.get_col_name(),
-        ftypes.SpecialColumns.RTicker.get_col_name(),
-        ftypes.SpecialColumns.RExchange.get_col_name(),
-    ]
     
-    CATEGORY_DF_SORT = [
-        report_info.category_column.get_col_name(),
-    ]
-    
-    stocks_df = joined_df[[
-        report_info.category_column.get_col_name(),
-        ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc.get_col_name(),
-        report_info.pick_type_order_col.get_col_name(),
-        ftypes.SpecialColumns.DJoinAllBitMask.get_col_name(),
-        ftypes.SpecialColumns.RExchange.get_col_name(),
-        ftypes.SpecialColumns.RTicker.get_col_name(),
-        ftypes.SpecialColumns.RCurrValue.get_col_name()]].copy()
+    res_df = joined_df.copy()
     
     def get_cat_perc(row):
-        cat = row[report_info.category_column.get_col_name()]
+        cat = row[report_config.cat_column]
         val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
         cat_val = category_df.loc[cat,ftypes.SpecialColumns.RCurrValue.get_col_name()]
 
         return val/cat_val
 
 
-    stocks_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = stocks_df.apply(get_cat_perc,axis=1)
-    stocks_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = stocks_df.apply(get_total_perc,axis=1)
+    res_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = res_df.apply(get_cat_perc,axis=1)
+    res_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = res_df.apply(get_total_perc,axis=1)
+
+    def row_filter_fn(bitmask):
+        def res_fn(row):
+            val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
+            if val != 0.0 and not pd.isna(val):
+                return True
+
+            bm = util.default_df_val(row[ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()],0)
+            return (bm & bitmask) != 0
+        
+        return res_fn
 
     #we need to filter out empty rows that don't correspond to our report type. For capgains, we don't want empty divi
     #portfolio rows, since there are so many and its distracting. For divi, vic versa.
-    stocks_df = stocks_df[stocks_df.apply(report_info.stocks_row_filter,axis=1)]
+    res_df = res_df[res_df.apply(row_filter_fn(report_config.always_show_pick_bitmask),axis=1)]
 
     def get_cat_total_perc_for_df(row):
-        cat = row[report_info.category_column.get_col_name()]
+        cat = row[report_config.cat_column]
         cat_val = category_df.loc[cat][ftypes.SpecialColumns.RCurrValue.get_col_name()]
 
         return cat_val/total_sum
 
+    # TODO 2.5 reenable this, using a different column per report or something...
     # we feed the data back into the main df, as well, so that the data page has all the data
-    joined_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RCatPerc.get_col_name()]
-    joined_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()]
-    joined_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = joined_df.apply(get_cat_total_perc_for_df,axis=1)
+    # joined_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RCatPerc.get_col_name()]
+    # joined_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()]
+    # joined_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = joined_df.apply(get_cat_total_perc_for_df,axis=1)
 
-    #this will convert the index containing the category to a regular column. We
-    #do this so we can treat category_df just like stocks_df. Otherwise we 
-    #have to do a lot of special things due to it having a custom index.
-    category_df.reset_index(inplace=True) 
+    res_df.sort_values(by=report_config.column_order,inplace=True)
 
-    stocks_df.sort_values(by=STOCKS_DF_SORT,inplace=True)
+    res_df = res_df[[r[0] for r in report_config.columns]]
 
-    stocks_df = stocks_df.drop(columns=[report_info.pick_type_order_col.get_col_name(),ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()])
+    res_df.rename(columns={ name : display_as for name,display_as,excel_format in report_config.columns}, inplace=True)
 
-    category_df.sort_values(by=CATEGORY_DF_SORT,inplace=True)
+    def final_step_fn(writer):
+        res_df.to_excel(writer, index=False, sheet_name=report_config.name)
+        ws = writer.sheets[report_config.name]
+        style_report_ws(ws)
 
-    orig_stock_df_cols = list(stocks_df.columns)
-    stocks_df.rename(columns=COL_TO_REPORT_NAME, inplace=True)
-    orig_theme_df_cols = list(category_df.columns)
-    category_df.rename(columns=COL_TO_REPORT_NAME, inplace=True)
+        excel_formats = [r[2] for r in report_config.columns]
+        update_number_formats(excel_formats,ws,res_df.shape[0],native_currency_code)
 
-    def add_reports(writer):
-        add_df(stocks_df, report_info.stocks_ws_title, writer, native_currency_code, orig_cols=orig_stock_df_cols)
-        add_df(category_df, report_info.cat_ws_title, writer, native_currency_code, orig_cols=orig_theme_df_cols)
-
-    return add_reports
-
+    return final_step_fn
 
 
 def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFrame, picks_df : pd.DataFrame, native_currency_code : str, 
@@ -301,17 +288,21 @@ def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFra
 
     #make_portfolio_reports returns a function here because debugging while within a "with pd.ExcelWriter..." is a pain,
     #so we minimize the amount of code inside it
-    add_capgains_reports_fn = make_portfolio_reports(config, PortfolioReportType.CapGains,joined_df,holdings_df,picks_df,native_currency_code)
-    add_divi_reports_fn = make_portfolio_reports(config, PortfolioReportType.Divi,joined_df,holdings_df,picks_df,native_currency_code)
+    report_writer_fn_list = [make_portfolio_reports(config, report_config, joined_df,holdings_df,picks_df,native_currency_code) for report_config in config.reports]
     
     # Export to Excel
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
-        add_capgains_reports_fn(writer)
-        add_divi_reports_fn(writer)
+        for rw_fn in report_writer_fn_list:
+            rw_fn(writer)
 
-        add_df(holdings_df, HOLDINGS_WS_TITLE, writer, native_currency_code, always_use_generic_number_format=True)
-        add_df(picks_df, PICK_WS_TITLE, writer, native_currency_code, always_use_generic_number_format=True)
-        add_df(orig_joined_df, JOINED_DATA_WS_TITLE, writer, native_currency_code)
+        def add_df(res_df, title, writer):
+            res_df.to_excel(writer, index=False, sheet_name=title)
+            ws = writer.sheets[title]
+            style_report_ws(ws)
+
+        add_df(holdings_df, HOLDINGS_WS_TITLE, writer)
+        add_df(picks_df, PICK_WS_TITLE, writer)
+        add_df(orig_joined_df, JOINED_DATA_WS_TITLE, writer)
         
 
 

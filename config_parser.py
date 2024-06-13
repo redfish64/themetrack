@@ -48,7 +48,7 @@ def parse_option_group(fi,options_dict):
 def parse_report_columns(rows,row_index):
     util.verify_header(row_index,rows[0][0:3],["Name","Display As","Excel Format"])
 
-    cols = { name : (display_as,excel_format) for name,display_as,excel_format in trim_cols(rows[1:],3)}
+    cols = [(name,display_as,excel_format) for name,display_as,excel_format in trim_cols(rows[1:],3)]
 
     return cols
 
@@ -63,24 +63,27 @@ def parse_always_show_pick(rows,base_ri):
 
     return total_bf
 
-def parse_theme_report(fi):
-    tr = ftypes.ThemeReportConfig(name=None,columns=None,cat_column=None,always_show_pick_bitmask=0)
+def parse_cat_report(fi):
+    tr = ftypes.ReportConfig(name=None,columns=None,cat_column=None,column_order=None,always_show_pick_bitmask=0,is_cat_type=True)
     x = { 
         "Name" : (True,lambda rows,row_index : setattr(tr,'name',rows[0][0])),
         "Category" : (True,lambda rows,row_index : setattr(tr,'cat_column',rows[0][0])),
-        "AlwaysShowPickCategories" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
+        "AlwaysShowPicks" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
         "Columns" : (True,lambda rows,row_index : setattr(tr,'columns',parse_report_columns(rows,row_index))),
+        "ColumnOrder" : (True,lambda rows,row_index : setattr(tr,'column_order',[r[0] for r in rows])),
     }
     parse_option_group(fi,x)
 
     return tr
 
 def parse_securities_report(fi):
-    tr = ftypes.ReportConfig(name=None,columns=None,always_show_pick_bitmask=0)
+    tr = ftypes.ReportConfig(name=None,columns=None,cat_column=None,column_order=None,always_show_pick_bitmask=0,is_cat_type=False)
     x = { 
         "Name" : (True,lambda rows,row_index : setattr(tr,'name',rows[0][0])),
-        "AlwaysShowPickCategories" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
+        "Category" : (True,lambda rows,row_index : setattr(tr,'cat_column',rows[0][0])),
+        "AlwaysShowPicks" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
         "Columns" : (True,lambda rows,row_index : setattr(tr,'columns',parse_report_columns(rows,row_index))),
+        "ColumnOrder" : (True,lambda rows,row_index : setattr(tr,'column_order',[r[0] for r in rows])),
     }
     parse_option_group(fi,x)
 
@@ -117,7 +120,7 @@ def parse_options(options_csv_iter):
             case "ReportCurrency":
                 config.currency = row[1]
             case "ThemeReport":
-                config.reports.append(parse_theme_report(fi))
+                config.reports.append(parse_cat_report(fi))
             case "SecuritiesReport":
                 config.reports.append(parse_securities_report(fi))
             case "CurrencyFormat":
@@ -145,9 +148,8 @@ def parse_options(options_csv_iter):
             ALL_VARS_PATTERN = re.compile(r'\$\{([a-zA-Z0-9 _-]+)\}')
             
             return ALL_VARS_PATTERN.sub(replace_var, txt)
-
-        for name,(display_as,excel_format) in report.columns.items():
-            report.columns[name] = (replace_vars(display_as),replace_vars(excel_format))
+        
+        report.columns = [ (name,replace_vars(display_as),replace_vars(excel_format)) for name,display_as,excel_format in report.columns]
 
     for r in config.reports:
         fix_special_vars_for_report(r)
