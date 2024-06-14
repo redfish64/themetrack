@@ -86,6 +86,8 @@ def generic_parse(file):
                 pass
             elif(row_type == IBRowType.Notes.name):
                 pass
+            elif(row_type == ''):
+                pass
             else:
                 csv_error(row,row_index,0,"Unrecognized row type")                
 

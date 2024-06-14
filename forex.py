@@ -5,23 +5,16 @@ from datetime import date
 
 from util import error
 
+
 #TODO 2.1 warn when the date is not available, so user can download new currency tables
 converter = CurrencyConverter(fallback_on_missing_rate=True,fallback_on_wrong_date=True)
 
-def convert(curr_from,curr_to,amt,conv_date=None):
-    """converts one currency to another on the given date
+def convert(curr_from,curr_to,amt,file):
+    """converts one currency to another
 
     Args:
-        date (_type_): date to convert the currency, defaults to today
-        curr_from (_type_): _description_
-        curr_to (_type_): _description_
-        amt (_type_): _description_
-
-    Returns:
-        _type_: _description_
+        file: file to use to convert
     """
-    if(conv_date is None):
-        conv_date = date.today()
     #TODO 2 we aren't using date for now
     return converter.convert(amt,curr_from,curr_to, conv_date)
 

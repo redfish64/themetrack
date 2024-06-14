@@ -12,6 +12,9 @@ FINANCE_REPORTS_DIR = "reports"
 
 THEME_TRACK_CONFIG_FILE = 'theme_track_config.xlsx'
 
+FOREX_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref.zip'
+FOREX_FILENAME = 'forex.zip'
+
 class PickType(Enum):
     CapexTotalPortfolio = auto(),
     CapexSkeletonPortfolio = auto(),
@@ -172,6 +175,7 @@ class ReportConfig:
     always_show_pick_bitmask : int # bitmask of pick types to always show rows for, even if zero funds are invested 
     columns : list [(str,str,str)] #column name, display_as, excel_format
     column_order : list [str] #columns to order the rows by
+    sum_columns : list [str] #list of column names to sort by
     cat_column : str #category column used to combine rows
     is_cat_type : bool
 

@@ -6,6 +6,8 @@ import pathlib
 import re
 import shutil
 import sys
+
+import urllib
 import util
 import capex_scraper
 import ib_parser
@@ -19,6 +21,7 @@ import external
 import scraper_util
 import config_parser
 import array_log as al
+from currency_converter import CurrencyConverter
 
 CREATE_SNAPSHOT_COMMAND = 'create-snapshot'
 CREATE_REPORTS_COMMAND = 'create-reports'
@@ -161,15 +164,15 @@ def get_sub_dir_from_config(args):
 
 def create_snapshot(args):
     print("create snapshot!")
-    dir = os.path.join(args.main_dir,args.sub_dir)
-    theme_track_config_dest = os.path.join(dir,ftypes.THEME_TRACK_CONFIG_FILE)
+    dest_dir = os.path.join(args.main_dir,args.sub_dir)
+    theme_track_config_dest = os.path.join(dest_dir,ftypes.THEME_TRACK_CONFIG_FILE)
     if(os.path.exists(theme_track_config_dest)):
         print(f"{theme_track_config_dest} already exists.")
         if(not args.no_open_window):
             print("Opening a gui window to output directory")
-            external.open_dir(dir)
+            external.open_dir(dest_dir)
     else:
-        print(f"Creating snapshot at {dir}")
+        print(f"Creating snapshot at {dest_dir}")
 
         #find the best theme_track_config file to use
         theme_track_config_src_dir = None
@@ -181,19 +184,21 @@ def create_snapshot(args):
             theme_track_config_src = get_datafile(ftypes.THEME_TRACK_CONFIG_FILE)
         else:
             theme_track_config_src = os.path.join(theme_track_config_src_dir,ftypes.THEME_TRACK_CONFIG_FILE)
-        os.makedirs(dir, exist_ok=True)
+        os.makedirs(dest_dir, exist_ok=True)
         shutil.copyfile(theme_track_config_src,theme_track_config_dest)
 
-        print(f"Copied {ftypes.THEME_TRACK_CONFIG_FILE} from {theme_track_config_src} to {dir}")
+        print(f"Copied {ftypes.THEME_TRACK_CONFIG_FILE} from {theme_track_config_src} to {dest_dir}")
 
         if(not args.no_open_window):
             print("Opening a gui window to output directory")
-            external.open_dir(dir)
+            external.open_dir(dest_dir)
 
-        print("Done!")
+    urllib.request.urlretrieve(ftypes.FOREX_URL, os.path.join(dest_dir,ftypes.FOREX_FILENAME))
+
+    print("Done!")
 
     print(f"""Now, please do the following:
-1. Copy brokerage reports to {dir}
+1. Copy brokerage reports to {dest_dir}
 2. Login in capexinsider.com
 3. Run "(cmd) {DOWNLOAD_CAPEX_COMMAND} (browser)" to download capex files into the directory. Browser is the browser you logged in with and is
    one of: {", ".join([x.name for x in scraper_util.Browser])}
@@ -227,7 +232,9 @@ def move_columns_to_front(df, columns_to_front):
     # Return the reordered DataFrame
     return df[new_order]
 
-def fill_in_forex(df):
+def fill_in_forex(df, data_dir,config : ftypes.Config):
+    
+    converter = CurrencyConverter(currency_file=os.path.join(data_dir,ftypes.FOREX_FILENAME),fallback_on_missing_rate=True,fallback_on_wrong_date=True)
 
     def update_native_currency(row):
         curr_from = row[ftypes.SpecialColumns.RCurrValueCurrency.get_col_name()]
@@ -236,7 +243,7 @@ def fill_in_forex(df):
         if(pd.isna(curr_from) or pd.isna(amt_from)):
             return None
         
-        amt_to = forex.convert(curr_from,"USD",amt_from) #TODO 2 figure out dates here
+        amt_to = converter.convert(amt_from,curr_from,config.currency)
 
         return amt_to
 
@@ -397,7 +404,7 @@ def create_reports(args):
     match_columns = list(match_columns)
     match_columns.sort()
 
-    fill_in_forex(res_pd)
+    fill_in_forex(res_pd,sub_dir,config)
 
     #res_pd = move_columns_to_front(res_pd,match_columns+[ftypes.SpecialColumns.JoinResult.get_col_name(),ftypes.SpecialColumns.JoinAll.get_col_name()])
     front_columns = [c for c in res_pd.columns if re.match(r'^[A-Z]:',c)]
@@ -437,7 +444,6 @@ def setup_argparse():
 
     subparsers = parser.add_subparsers(title="commands", description="Available commands", help="Use `command -h` for more details", dest="command")
 
-    # Subparser for the 'scrape' command
     parser_snapshot = subparsers.add_parser(CREATE_SNAPSHOT_COMMAND, help="Creates a new directory to produce reports")
     parser_snapshot.add_argument('--sub-dir', type=str, default=today_as_yyyy_mm_dd(), 
                                  help="The name of the sub-dir to create.")
@@ -448,14 +454,12 @@ def setup_argparse():
                                  help='Normally, a gui window will open up of the snapshot dir created. Using this option prevents this.')
     parser_snapshot.set_defaults(func=create_snapshot)
 
-    # Subparser for the 'scrape' command
-    parser_scrape = subparsers.add_parser(DOWNLOAD_CAPEX_COMMAND, help="Downloads capex portfolio. Make sure to log in prior to calling this")
-    parser_scrape.add_argument('--sub-dir', type=str, 
+    parser_download_capex = subparsers.add_parser(DOWNLOAD_CAPEX_COMMAND, help="Downloads capex portfolio. Make sure to log in prior to calling this")
+    parser_download_capex.add_argument('--sub-dir', type=str, 
                                help="The name of the sub-dir to download the capex files into. Defaults to the latest directory.")
-    parser_scrape.add_argument('browser', type=str, choices=["chrome","firefox","brave"], help="The browser used to login to website")
-    parser_scrape.set_defaults(func=download_capex)
+    parser_download_capex.add_argument('browser', type=str, choices=["chrome","firefox","brave"], help="The browser used to login to website")
+    parser_download_capex.set_defaults(func=download_capex)
 
-    # Subparser for the 'create-reports' command
     parser_create_reports = subparsers.add_parser(CREATE_REPORTS_COMMAND, help="Create reports from the provided data")
     parser_create_reports.add_argument('--sub-dir', type=str, 
                                        help="The name of the sub-dir to download the capex files into. Defaults to the latest directory.")

@@ -9,150 +9,27 @@ from openpyxl.styles import Font
 import array_log as al
 import util
 
-STOCKS_WS_TITLE = 'Securities Report'
-THEMES_WS_TITLE = 'Themes Report'
 HOLDINGS_WS_TITLE = 'Holdings Input Data'
 PICK_WS_TITLE = 'Pick Input Data'
 JOINED_DATA_WS_TITLE = 'Joined Data'
 NA_STR_NAME = '(none)'
 
-#TODO 4 maybe one day parse the excel format, ex. '"$"#,##0.00', directly
-def calc_num_len(fixed : int,num_decimals : int ,val : float):
-    """Calculates the number of characters taken up by the end result in the spreadsheet for a float.
-
-    Args:
-        fixed (int): number of additional characters to add to the total. For ex. for '"$"#,##0.00' there is 1 for the dollar sign
-        num_decimals (int): number of decimal places after the ., ex. for 1234.567, 2 would be 1234.58
-        val (float): value to calculate length for
-
-    Returns:
-        int: number of characters
-    """
-
-    #we get the val_str for the number without any decimals to calculate its length correctly and simply
-    #PERF could be faster
-    if(isinstance(val,str)):
-        val_str = val
-    else:
-        val_str = f"{round(val):,}"
-    return fixed + len(val_str) + (0 if num_decimals == 0 else num_decimals + 1) # +1 for the '.'
-
-def generic_len(val):
-    return len(str(val))
-
-def get_currency_format(currency_symbol):
-    currency_formats = {
-        'USD': ('"$"#,##0.00',partial(calc_num_len,1,2)),  # US Dollar
-        'EUR': ('"€"#,##0.00',partial(calc_num_len,1,2)),  # Euro
-        'GBP': ('"£"#,##0.00',partial(calc_num_len,1,2)),  # British Pound
-        'JPY': ('"¥"#,##0',partial(calc_num_len,1,2)),     # Japanese Yen (no decimal places)
-        'CNY': ('"¥"#,##0.00',partial(calc_num_len,1,2)),  # Chinese Yuan
-        'INR': ('"₹"#,##0.00',partial(calc_num_len,1,2)),  # Indian Rupee
-        'AUD': ('"$"#,##0.00',partial(calc_num_len,1,2)),  # Australian Dollar
-        'CAD': ('"$"#,##0.00',partial(calc_num_len,1,2)),  # Canadian Dollar
-        'CHF': ('"CHF"#,##0.00',partial(calc_num_len,3,2)),# Swiss Franc
-        'HKD': ('"$"#,##0.00',partial(calc_num_len,1,2)),  # Hong Kong Dollar
-        'NZD': ('"$"#,##0.00',partial(calc_num_len,1,2)),  # New Zealand Dollar
-        'KRW': ('"₩"#,##0',partial(calc_num_len,1,2)),     # South Korean Won (no decimal places)
-        'SGD': ('"$"#,##0.00',partial(calc_num_len,1,2)),  # Singapore Dollar
-        'BRL': ('"R$"#,##0.00',partial(calc_num_len,2,2)), # Brazilian Real
-        'ZAR': ('"R"#,##0.00',partial(calc_num_len,1,2)),  # South African Rand
-    }
-
-    return currency_formats.get(currency_symbol, ('"$"#,##0.00',partial(calc_num_len,1,2)))  # Default format if not found
-
-class PortfolioReportType(Enum):
-     CapGains = auto(),
-     Divi = auto(),
-
-@dataclass
-class PortfolioReportInfo:
-    """Information used by reports for each type of report
-    """
-    category_column : ftypes.SpecialColumns
-    pick_type_order_col : ftypes.SpecialColumns
-    stocks_row_filter : Callable[[Any],bool]
-    category_name : str #name of category in reports
-    stocks_ws_title : str #title of stocks report worksheet
-    cat_ws_title : str #title of category report worksheet
-    pick_type_short_name_col : ftypes.SpecialColumns
-
-
-#TODO 2.5 remove pick priority stuff, since pick priority now depends on the report 
-
-def cap_gains_row_filter(row):
-    """Shows all capgain and skeleton rows and any other row with a value attached. The idea here is that
-    we want to show investments in non capex stocks, but we don't want to show rows for all the
-    non-capex stock picks.
-    """
-    val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
-    if val != 0.0 and not pd.isna(val):
-        return True
-
-    bm = util.default_df_val(row[ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()],0)
-    return (
-        ftypes.bit_mask_has_pick_type(bm,ftypes.PickType.CapexTotalPortfolio)
-        or ftypes.bit_mask_has_pick_type(bm,ftypes.PickType.CapexSkeletonPortfolio)
-    )
-
-def divi_row_filter(row):
-    """Shows all divi rows and any other row with a value attached. The idea here is that
-    we want to show investments in non divi stocks, but we don't want to show rows for all the
-    non-divi stock picks.
-    """
-    val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
-    if val != 0.0 and not pd.isna(val):
-        return True
-    bm = util.default_df_val(row[ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()],0)
-    return (
-        ftypes.bit_mask_has_pick_type(bm,ftypes.PickType.CapexDiviPortfolio)
-    )
-
-REPORT_TYPE_TO_REPORT_INFO = { 
-                                PortfolioReportType.CapGains : PortfolioReportInfo(
-                                    category_column=ftypes.SpecialColumns.RTheme,
-                                    stocks_row_filter=cap_gains_row_filter,
-                                    pick_type_order_col=ftypes.SpecialColumns.DCapexGainsPickTypeOrder,
-                                    category_name="Theme",
-                                    stocks_ws_title="CapGains Stocks",
-                                    cat_ws_title="CapGains Themes",
-                                    pick_type_short_name_col=ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc,
-                                ),
-                                PortfolioReportType.Divi : PortfolioReportInfo(
-                                    category_column=ftypes.SpecialColumns.RSector,
-                                    stocks_row_filter=divi_row_filter,
-                                    pick_type_order_col=ftypes.SpecialColumns.DDiviPickTypeOrder,
-                                    category_name="Sector",
-                                    stocks_ws_title="Divi Stocks",
-                                    cat_ws_title="Divi Themes",
-                                    pick_type_short_name_col=ftypes.SpecialColumns.DDiviPickTypeShortDesc,
-                                ),
-                                }
-
-
 header_font = Font(bold=True, italic=True)
+total_line_font = Font(bold=True)
 
-def style_report_ws(ws):
+def style_simple_report_ws(ws):
     #Make header stylish
     for cell in ws[1]:
         cell.font = header_font
 
-GENERIC_EXCEL_TYPE = ("@",generic_len)
+def style_report_ws(ws, num_lines):
+    #Make header stylish
+    for cell in ws[1]:
+        cell.font = header_font
+    #Make last line (the total) stylish
+    for cell in ws[num_lines+1]:
+        cell.font = total_line_font
 
-def col_to_excel_type(col_name : str, native_currency_code : str):
-    return ({
-        ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc : ("@",len),
-        ftypes.SpecialColumns.DDiviPickTypeShortDesc : ("@",len),
-        ftypes.SpecialColumns.RCurrValue.get_col_name() : get_currency_format(native_currency_code),
-        ftypes.SpecialColumns.RExchange.get_col_name() : ("@",len),
-        ftypes.SpecialColumns.RTicker.get_col_name() : ("@",len),
-        ftypes.SpecialColumns.RTheme.get_col_name() : ("@",len),
-        ftypes.SpecialColumns.RSector.get_col_name() : ("@",len),
-        ftypes.SpecialColumns.RCatPerc.get_col_name() : ("0.00%",partial(calc_num_len,1,2)),
-        ftypes.SpecialColumns.RTotalPerc.get_col_name() : ("0.00%",partial(calc_num_len,1,2)),
-        ftypes.SpecialColumns.RCatTotalPerc.get_col_name() : ("0.00%",partial(calc_num_len,1,2)),
-        ftypes.SpecialColumns.DRefreshedDate.get_col_name() : ("YYYY-MM-DD",lambda val: 4+3+3)
-    }).get(col_name,GENERIC_EXCEL_TYPE)
 
 
 def calc_max_len(format_code, value):
@@ -161,20 +38,21 @@ def calc_max_len(format_code, value):
     prefix = prefix_match.group(1) if prefix_match else ''
 
     # Check if the format is for percentage
-    if re.match(r'0\.0+%', format_code):
-        # Percentage format
-        decimal_places = format_code.count('0') - 2
-        formatted_value = f"{value * 100:.{decimal_places}f}%"
-    elif re.match(r'\"\D*\"#,##0\.00', format_code):
-        # Currency format with any prefix
-        formatted_value = f"{prefix}{value:,.2f}"
-    elif format_code == '@':
+    if isinstance(value,(int, float)):
+        if re.match(r'0\.0+%', format_code):
+            # Percentage format
+            decimal_places = format_code.count('0') - 2
+            formatted_value = f"{value * 100:.{decimal_places}f}%"
+        elif re.match(r'\"\D*\"#,##0\.00', format_code):
+            # Currency format with any prefix
+            formatted_value = f"{prefix}{value:,.2f}"
+        else:
+            # General numeric format
+            decimal_places = format_code.count('0')
+            formatted_value = f"{value:,.{decimal_places}f}"
+    else: #format_code == '@':
         # General text format
         formatted_value = str(value)
-    else:
-        # General numeric format
-        decimal_places = format_code.count('0')
-        formatted_value = f"{value:,.{decimal_places}f}"
 
         #TODO 3 this function isn't perfect, but it handles common formats. Otherwise it falls back to this generic clause where we add 2 for some slop
         return len(formatted_value) + 2 
@@ -217,59 +95,68 @@ def make_portfolio_reports(config : ftypes.Config, report_config : ftypes.Report
     category_df = pd.pivot_table(joined_df, values=ftypes.SpecialColumns.RCurrValue.get_col_name(), 
                                     index=[report_config.cat_column],
                                     aggfunc="sum", fill_value=0).copy()
-    category_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
+
+    if(report_config.is_cat_type):
+        res_df = category_df
+        res_df.reset_index(names=[report_config.cat_column],inplace=True)
+        res_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
+    else:
+        category_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
+        res_df = joined_df.copy()
     
-    
-    res_df = joined_df.copy()
-    
-    def get_cat_perc(row):
-        cat = row[report_config.cat_column]
-        val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
-        cat_val = category_df.loc[cat,ftypes.SpecialColumns.RCurrValue.get_col_name()]
-
-        return val/cat_val
-
-
-    res_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = res_df.apply(get_cat_perc,axis=1)
-    res_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = res_df.apply(get_total_perc,axis=1)
-
-    def row_filter_fn(bitmask):
-        def res_fn(row):
+        def get_cat_perc(row):
+            cat = row[report_config.cat_column]
             val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
-            if val != 0.0 and not pd.isna(val):
-                return True
+            cat_val = category_df.loc[cat,ftypes.SpecialColumns.RCurrValue.get_col_name()]
 
-            bm = util.default_df_val(row[ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()],0)
-            return (bm & bitmask) != 0
-        
-        return res_fn
+            return val/cat_val
 
-    #we need to filter out empty rows that don't correspond to our report type. For capgains, we don't want empty divi
-    #portfolio rows, since there are so many and its distracting. For divi, vic versa.
-    res_df = res_df[res_df.apply(row_filter_fn(report_config.always_show_pick_bitmask),axis=1)]
 
-    def get_cat_total_perc_for_df(row):
-        cat = row[report_config.cat_column]
-        cat_val = category_df.loc[cat][ftypes.SpecialColumns.RCurrValue.get_col_name()]
+        res_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = res_df.apply(get_cat_perc,axis=1)
+        res_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = res_df.apply(get_total_perc,axis=1)
 
-        return cat_val/total_sum
+        def row_filter_fn(bitmask):
+            def res_fn(row):
+                val = row[ftypes.SpecialColumns.RCurrValue.get_col_name()]
+                if val != 0.0 and not pd.isna(val):
+                    return True
 
-    # TODO 2.5 reenable this, using a different column per report or something...
-    # we feed the data back into the main df, as well, so that the data page has all the data
-    # joined_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RCatPerc.get_col_name()]
-    # joined_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()]
-    # joined_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = joined_df.apply(get_cat_total_perc_for_df,axis=1)
+                bm = util.default_df_val(row[ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()],0)
+                return (bm & bitmask) != 0
+            
+            return res_fn
+
+        #we need to filter out empty rows that don't correspond to our report type. For capgains, we don't want empty divi
+        #portfolio rows, since there are so many and its distracting. For divi, vic versa.
+        res_df = res_df[res_df.apply(row_filter_fn(report_config.always_show_pick_bitmask),axis=1)]
+
+
+        # TODO 2.5 reenable this, using a different column per report or something...
+        # def get_cat_total_perc_for_df(row):
+        #     cat = row[report_config.cat_column]
+        #     cat_val = category_df.loc[cat][ftypes.SpecialColumns.RCurrValue.get_col_name()]
+
+        #     return cat_val/total_sum
+        # we feed the data back into the main df, as well, so that the data page has all the data
+        # joined_df[ftypes.SpecialColumns.RCatPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RCatPerc.get_col_name()]
+        # joined_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = stocks_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()]
+        # joined_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = joined_df.apply(get_cat_total_perc_for_df,axis=1)
 
     res_df.sort_values(by=report_config.column_order,inplace=True)
 
     res_df = res_df[[r[0] for r in report_config.columns]]
+
+    res_totals = pd.DataFrame(res_df[report_config.sum_columns].sum()).T
+    res_totals[res_df.columns[0]] = 'Total'
+
+    res_df = pd.concat([res_df,res_totals],ignore_index=True)
 
     res_df.rename(columns={ name : display_as for name,display_as,excel_format in report_config.columns}, inplace=True)
 
     def final_step_fn(writer):
         res_df.to_excel(writer, index=False, sheet_name=report_config.name)
         ws = writer.sheets[report_config.name]
-        style_report_ws(ws)
+        style_report_ws(ws,res_df.shape[0])
 
         excel_formats = [r[2] for r in report_config.columns]
         update_number_formats(excel_formats,ws,res_df.shape[0],native_currency_code)
@@ -298,7 +185,7 @@ def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFra
         def add_df(res_df, title, writer):
             res_df.to_excel(writer, index=False, sheet_name=title)
             ws = writer.sheets[title]
-            style_report_ws(ws)
+            style_simple_report_ws(ws)
 
         add_df(holdings_df, HOLDINGS_WS_TITLE, writer)
         add_df(picks_df, PICK_WS_TITLE, writer)

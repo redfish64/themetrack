@@ -25,8 +25,7 @@ def parse_option_group(fi,options_dict):
         if(name not in options_dict):
             util.csv_error(row,row_index,0,f"No such option {name}")
         (required,fn) = options_dict[name]
-        if(required):
-            used_options[name] = True
+        used_options[name] = True
         fn(rows,row_index)
 
     last_row_index = None
@@ -44,6 +43,10 @@ def parse_option_group(fi,options_dict):
             last_row_index = row_index + data_ri
 
     parse_option(last_name,last_rows,last_row_index)
+
+    for name,(required,fn) in options_dict.items():
+        if(required and not used_options[name]):
+            util.csv_error(data[0],row_index,0,"Option '{name}' is required but not present.") 
 
 def parse_report_columns(rows,row_index):
     util.verify_header(row_index,rows[0][0:3],["Name","Display As","Excel Format"])
@@ -63,27 +66,30 @@ def parse_always_show_pick(rows,base_ri):
 
     return total_bf
 
+
 def parse_cat_report(fi):
-    tr = ftypes.ReportConfig(name=None,columns=None,cat_column=None,column_order=None,always_show_pick_bitmask=0,is_cat_type=True)
+    tr = ftypes.ReportConfig(name=None,columns=None,cat_column=None,column_order=None,sum_columns=[],always_show_pick_bitmask=0,is_cat_type=True)
     x = { 
         "Name" : (True,lambda rows,row_index : setattr(tr,'name',rows[0][0])),
         "Category" : (True,lambda rows,row_index : setattr(tr,'cat_column',rows[0][0])),
         "AlwaysShowPicks" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
         "Columns" : (True,lambda rows,row_index : setattr(tr,'columns',parse_report_columns(rows,row_index))),
         "ColumnOrder" : (True,lambda rows,row_index : setattr(tr,'column_order',[r[0] for r in rows])),
+        "SumColumns" : (False,lambda rows,row_index : setattr(tr,'sum_columns',[r[0] for r in rows])),
     }
     parse_option_group(fi,x)
 
     return tr
 
 def parse_securities_report(fi):
-    tr = ftypes.ReportConfig(name=None,columns=None,cat_column=None,column_order=None,always_show_pick_bitmask=0,is_cat_type=False)
+    tr = ftypes.ReportConfig(name=None,columns=None,cat_column=None,column_order=None,sum_columns=[],always_show_pick_bitmask=0,is_cat_type=False)
     x = { 
         "Name" : (True,lambda rows,row_index : setattr(tr,'name',rows[0][0])),
         "Category" : (True,lambda rows,row_index : setattr(tr,'cat_column',rows[0][0])),
         "AlwaysShowPicks" : (True,lambda rows,row_index : setattr(tr,'always_show_pick_bitmask',parse_always_show_pick(rows,row_index))),
         "Columns" : (True,lambda rows,row_index : setattr(tr,'columns',parse_report_columns(rows,row_index))),
         "ColumnOrder" : (True,lambda rows,row_index : setattr(tr,'column_order',[r[0] for r in rows])),
+        "SumColumns" : (False,lambda rows,row_index : setattr(tr,'sum_columns',[r[0] for r in rows])),
     }
     parse_option_group(fi,x)
 
