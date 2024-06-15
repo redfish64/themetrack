@@ -187,9 +187,9 @@ def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFra
             ws = writer.sheets[title]
             style_simple_report_ws(ws)
 
-        add_df(holdings_df, HOLDINGS_WS_TITLE, writer)
-        add_df(picks_df, PICK_WS_TITLE, writer)
-        add_df(orig_joined_df, JOINED_DATA_WS_TITLE, writer)
+        #add_df(holdings_df, HOLDINGS_WS_TITLE, writer)
+        #add_df(picks_df, PICK_WS_TITLE, writer)
+        #add_df(orig_joined_df, JOINED_DATA_WS_TITLE, writer)
         
 
 

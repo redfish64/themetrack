@@ -86,7 +86,6 @@ class SpecialColumns(Enum):
     DCapexName = auto(),
     DAcctName = auto(),
     RPickType = auto(),
-    RPickDesc = auto(),
     RPickPriority = auto(),
     RMatchColumns = auto(),
     RCurrValueCurrency = auto(),
@@ -117,7 +116,6 @@ value (closer to 1) will be chosen as the theme. So if a
 security is in both CapexSkeletonPortfolio with ThemePriority 2, 
 and CapexDiviPortfolio with ThemePriority 3, then CapexSkeletonPortfolio 
 will be chosen""",
-                SpecialColumns.RPickDesc: "The way to describe additional picks for a one to many scenario",
                 SpecialColumns.DJoinResult: """
 SpecialColumns.The result of matching holdings to picks:
     SpecialColumns.1:1  - holding exactly matches a single pick
