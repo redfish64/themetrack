@@ -85,18 +85,15 @@ def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame)
     holdings_df['holdings_index'] = holdings_df.index
     picks_df['picks_index'] = picks_df.index
 
-    res_df_list = []
+    res = []
 
-    all_match_columns = {}
+    joined_pick_row_indexes = {}
 
     #PERF this is very slow, but we can speed it up later, by matching multiple holdings at a time 
     # that have the same MatchColumns value
     for hi,h in holdings_df.iterrows():
         #this should never be None because it was checked when the file was parsed
         h_mc,p_mc = rules_parser.parse_match_columns(h[ftypes.SpecialColumns.RMatchColumns.get_col_name()])
-
-        for mc in h_mc + p_mc:
-            all_match_columns[mc] = True   
 
         #match against the picks
                 
@@ -107,13 +104,65 @@ def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame)
             mask &= (picks_df[p_column] == value)  # Update mask to narrow down the rows
 
         filtered_picks_df = picks_df[mask]
+        
+        for pick_row in filtered_picks_df:
+            joined_pick_row_indexes[pick_row.index] = True
 
-        joined_df = filtered_picks_df.assign(**h)
+        joined_rows = filtered_picks_df.assign(**h)
 
-        res_df_list.append(joined_df)
+        num_joined_rows = len(joined_rows)
+        if(num_joined_rows == 0):
+            res.append(holdings_df.loc[hi].to_dict())
+            res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'None'
+        elif(num_joined_rows >= 1):
 
-    res = pd.concat(res_df_list, ignore_index=True)
-    return res,all_match_columns.keys()
+            if(num_joined_rows == 1):
+                res.append(joined_rows.iloc[0].to_dict())
+                res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = '1:1'
+
+            elif(num_joined_rows > 1):
+                def sort_by_priority(priority,series):
+                    pn_dict = { k.name : v for k,v in priority.items()}
+                    return series.map(pn_dict)            
+                
+                sorted_capex_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
+                                                                key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_CAPGAINS_PRIORITY))
+                sorted_divi_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
+                                                                key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_DIVI_PRIORITY))
+
+                #TODO 3.5 this is sort of a hack. We are taking the data from the highest priority capex row and adding the data from
+                #the highest priority divi row. This is because we want the sector from the divi pick and the theme from the 
+                #capex pick. So if a row matches both capex and divi, we need both capex and divi data to display the report properly
+                join_data = util.filter_nan_from_dict(sorted_divi_join_rows.iloc[0].to_dict()) | util.filter_nan_from_dict(sorted_capex_join_rows.iloc[0].to_dict()) 
+
+                res.append(join_data)
+                res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'Many'
+
+            pick_types = list(set([ftypes.PickType[r[ftypes.SpecialColumns.RPickType.get_col_name()]] 
+                                            for _,r in joined_rows.iterrows()]))
+
+            res[-1][ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc.get_col_name()] = get_port_desc(sorted_capex_join_rows,pick_types,ftypes.PICK_TYPE_TO_ORDER_CAP_GAINS)
+            res[-1][ftypes.SpecialColumns.DDiviPickTypeShortDesc.get_col_name()] = get_port_desc(sorted_divi_join_rows,pick_types,ftypes.PICK_TYPE_TO_ORDER_DIVI)
+
+            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = ftypes.pick_types_to_bitmask(pick_types)
+            res[-1][ftypes.SpecialColumns.DCapexGainsPickTypeOrder.get_col_name()] = pick_types_to_sort_order_key(pick_types,ftypes.PICK_TYPE_TO_ORDER_CAP_GAINS)
+            res[-1][ftypes.SpecialColumns.DDiviPickTypeOrder.get_col_name()] = pick_types_to_sort_order_key(pick_types,ftypes.PICK_TYPE_TO_ORDER_DIVI)
+
+            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = (
+                ftypes.pick_types_to_bitmask(pick_types)
+            )
+
+    #add any empty picks with no investments
+    for pi in picks_df.index:
+        if(pi in joined_pick_row_indexes):
+            continue
+
+        res.append(picks_df.loc[pi].to_dict())
+        res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'None'
+
+    res_pd = pd.DataFrame(res)
+
+    return res_pd
 
 
 def get_main_dir():
@@ -264,67 +313,6 @@ def fill_in_forex(df, data_dir,config : ftypes.Config):
     df[ftypes.SpecialColumns.RCurrValue.get_col_name()] = df.apply(update_native_currency,axis=1)
 
 
-def merge_joining_into_result(holdings_df,join_res,picks_df):
-    
-
-    #PERF: this code is probably inefficient
-    res = []
-
-    for hi in holdings_df.index:
-        joined_rows = join_res[join_res['holdings_index'] == hi]
-        num_joined_rows = len(joined_rows)
-        if(num_joined_rows == 0):
-            res.append(holdings_df.loc[hi].to_dict())
-            res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'None'
-        elif(num_joined_rows >= 1):
-
-            if(num_joined_rows == 1):
-                res.append(joined_rows.iloc[0].to_dict())
-                res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = '1:1'
-
-            elif(num_joined_rows > 1):
-                def sort_by_priority(priority,series):
-                    pn_dict = { k.name : v for k,v in priority.items()}
-                    return series.map(pn_dict)            
-                
-                sorted_capex_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
-                                                                key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_CAPGAINS_PRIORITY))
-                sorted_divi_join_rows = joined_rows.sort_values(by=ftypes.SpecialColumns.RPickType.get_col_name(),
-                                                                key=partial(sort_by_priority,ftypes.PICK_TYPE_TO_DIVI_PRIORITY))
-
-                #TODO 3.5 this is sort of a hack. We are taking the data from the highest priority capex row and adding the data from
-                #the highest priority divi row. This is because we want the sector from the divi pick and the theme from the 
-                #capex pick. So if a row matches both capex and divi, we need both capex and divi data to display the report properly
-                join_data = util.filter_nan_from_dict(sorted_divi_join_rows.iloc[0].to_dict()) | util.filter_nan_from_dict(sorted_capex_join_rows.iloc[0].to_dict()) 
-
-                res.append(join_data)
-                res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'Many'
-
-            pick_types = list(set([ftypes.PickType[r[ftypes.SpecialColumns.RPickType.get_col_name()]] 
-                                            for _,r in joined_rows.iterrows()]))
-
-            res[-1][ftypes.SpecialColumns.DCapexGainsPickTypeShortDesc.get_col_name()] = get_port_desc(sorted_capex_join_rows,pick_types,ftypes.PICK_TYPE_TO_ORDER_CAP_GAINS)
-            res[-1][ftypes.SpecialColumns.DDiviPickTypeShortDesc.get_col_name()] = get_port_desc(sorted_divi_join_rows,pick_types,ftypes.PICK_TYPE_TO_ORDER_DIVI)
-
-            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = ftypes.pick_types_to_bitmask(pick_types)
-            res[-1][ftypes.SpecialColumns.DCapexGainsPickTypeOrder.get_col_name()] = pick_types_to_sort_order_key(pick_types,ftypes.PICK_TYPE_TO_ORDER_CAP_GAINS)
-            res[-1][ftypes.SpecialColumns.DDiviPickTypeOrder.get_col_name()] = pick_types_to_sort_order_key(pick_types,ftypes.PICK_TYPE_TO_ORDER_DIVI)
-
-            res[-1][ftypes.SpecialColumns.DJoinAllBitMask.get_col_name()] = (
-                ftypes.pick_types_to_bitmask(pick_types)
-            )
-
-    #add any empty picks with no investments
-    for pi in picks_df.index:
-        joined_rows = join_res[join_res['picks_index'] == pi]
-        num_joined_rows = len(joined_rows)
-        if(num_joined_rows == 0):
-            res.append(picks_df.loc[pi].to_dict())
-            res[-1][ftypes.SpecialColumns.DJoinResult.get_col_name()] = 'None'
-
-    res_pd = pd.DataFrame(res)
-
-    return res_pd
 
 def create_reports(args):
     sub_dir = get_sub_dir_from_config(args)
@@ -386,14 +374,7 @@ def create_reports(args):
     with al.add_log_context(rules_log,{"df": "picks"}):
         rules_parser.run_rules(system_overrides,user_overrides,picks_df,rules_log)
 
-    join_res,match_columns = join_holdings_and_picks(holdings_df,picks_df)
-
-    res_pd = merge_joining_into_result(holdings_df,join_res,picks_df)
-
-
-
-    match_columns = list(match_columns)
-    match_columns.sort()
+    res_pd = join_holdings_and_picks(holdings_df,picks_df)
 
     fill_in_forex(res_pd,sub_dir,config)
 
