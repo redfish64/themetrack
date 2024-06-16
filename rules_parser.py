@@ -14,8 +14,6 @@ import re
 import pandas as pd
 import array_log as al
 
-
-
 class MatchCondition:
     def __init__(self,row_index : int,name,val_str) -> None:
         self.row_index = row_index
@@ -83,11 +81,13 @@ def fixed_column(str):
 def is_fixed_column(s : str):
     return s.endswith("___FIXED___")
 
+
 class OverrideRule:
-    def __init__(self, ri : int) -> None:
+    def __init__(self, ri : int, is_user_rule) -> None:
         self.row_index = ri
         self.match_conditions = []
         self.replacements = []
+        self.is_user_rule = is_user_rule
 
     def add_match_condition(self, ri : int, match_name, match_value):
         """
@@ -124,7 +124,7 @@ class OverrideRule:
         
         return (True, var_subs)
     
-    def apply(self,var_subs,df,index, log, is_user_rule=False, fixed_columns = {}):
+    def apply(self,var_subs,df,index, log, fixed_columns = {}):
         """_summary_
 
         Args:
@@ -140,17 +140,17 @@ class OverrideRule:
 
         for row_index,r_name,r_value in self.replacements:
             with al.add_log_context(log,{"replacement_row_index" : row_index,"r_name" : r_name,"r_value" : r_value}):
-                if(r_name in fixed_columns and not is_user_rule):
+                if(r_name in fixed_columns and not self.is_user_rule):
                     al.write_log(log,f"{r_name} was modified by a user_rule, skipping")
                     next
 
                 updated_val = re.sub(r'\$\{(\w+)\}', replace_var_sub, r_value)
                 old_value = df.at[index,r_name] if r_name in df.columns else None
-                if(is_user_rule or r_name not in fixed_columns):
+                if(self.is_user_rule or r_name not in fixed_columns):
                     if(old_value != updated_val):
                         al.write_log(log,f'Updating from "{old_value}" to "{updated_val}"')
                         df.at[index,r_name] = updated_val
-                    if(is_user_rule):
+                    if(self.is_user_rule):
                         al.write_log(log,f'Setting {r_name} as fixed column')
                         fixed_columns[r_name] = True
     
@@ -211,6 +211,115 @@ def parse_override_file(fi) -> list[OverrideRule]:
             current_rule.add_replacement(ri,repl_name, repl_value)
 
     return rules
+
+def get_match_name_list_sorted_by_usage(override_rules):
+        match_name_to_count = {}
+        for r in override_rules:
+            for m in r.match_conditions:
+                if(m.name in match_name_to_count):
+                    match_name_to_count[m.name] += 1
+                else:
+                    match_name_to_count[m.name] = 1
+
+        res = [(k, v) for k, v in match_name_to_count.items()]
+        res.sort(key=lambda item: item[1], reverse=True)
+
+        return [i[0] for i in res]
+
+class MatchTree:
+    def __init__(self) -> None:
+        self.name = None
+        self.match_cond_dict = {}
+        self.regex_match_cond_list = []
+        self.not_apply_mt = None #for rules that don't have this name in them, we skip to the mt here
+        self.exec_rules = []
+
+    def add_match_cond(self,mc_list : list,rule_order : int, rule : OverrideRule, name_sort_order : dict[str,int], next_child_mt=None):
+        if(mc_list == []):
+            self.exec_rules.append((rule_order,rule))
+            return self
+        
+        mc = mc_list[0]
+
+        def pass_to_child(next_match_tree):
+            return next_match_tree.add_match_cond(mc_list[1:], rule_order, rule, name_sort_order)
+        
+        if(next_child_mt is None):
+            next_child_mt =  MatchTree()
+            
+
+        if(self.name is None):
+            self.name = mc.name
+        
+        if(self.name == mc.name):
+            if(isinstance(mc,ReMatchCondition)):
+                for index, re_mc,next_match_tree in enumerate(self.regex_match_cond_list):
+                    if(mc.val_re == re_mc.val_re and mc.var_names == re_mc.var_names):
+                        self.regex_match_cond_list[index] = (re_mc,pass_to_child(next_match_tree))
+                        return self
+                
+                #not already existing regex
+                self.regex_match_cond_list.append((mc.val_re,pass_to_child(next_child_mt)))
+
+                return self
+            else: # normal match condition
+                if(mc.value in self.match_cond_dict):
+                    self.match_cond_dict[mc.value] = pass_to_child(self.match_cond_dict[mc.value])
+                    return self
+                
+                #not already there
+                self.match_cond_dict[mc.value] = pass_to_child(next_child_mt)
+
+                return self
+        else: #different name
+            my_rank = name_sort_order[self.name]
+            other_rank = name_sort_order[mc.name]
+
+            if(my_rank < other_rank): #if we are to be higher in the tree
+                if(self.not_apply_mt is None):
+                    self.not_apply_mt = next_child_mt
+                self.not_apply_mt = pass_to_child(self.not_apply_mt)
+            else: #we should be lower down
+                parent = MatchTree()
+                return parent.add_match_cond(mc_list,name_sort_order,None, self)
+
+
+    def get_rules(self,row,match_vars={}):
+        val = row[self.name]
+        mc_sub_mt = self.match_cond_dict.get(val,None)
+        res = [] if mc_sub_mt is None else mc_sub_mt.get_rules(row,match_vars)
+        for regex_match_cond,sub_mt in self.regex_match_cond_list:
+            is_match,curr_match_vars = regex_match_cond.matches(row)
+            if(is_match):
+                res.append(sub_mt.get_rules(row,match_vars | curr_match_vars))
+        
+        if(self.not_apply_mt is not None):
+            res.append(self.not_apply_mt.get_rules(row,match_vars))
+        
+
+
+class FastOverrideRulesList:
+    def __init__(self, override_rules : list[OverrideRule]):
+        match_names = get_match_name_list_sorted_by_usage(override_rules)
+
+        root_match_tree = MatchTree()
+
+        match_names_to_sort_key = { n : ni for ni,n in enumerate(match_names)}
+
+        for r in override_rules:
+            #sort the match conditions so the most common ones are first
+            rule_match_conds = sorted(r.match_conditions,key = lambda: match_names_to_sort_key[mc])
+
+            for mc in rule_match_conds:
+                root_match_tree = root_match_tree.add_match_cond(mc)
+            
+            curr_match_tree.add_exec_rule(r)
+        
+        self.root_match_tree = root_match_tree
+
+    def get_rules(self,df,index,log):
+        return self.root_match_tree.get_rules(df[index].to_dict())
+
 
 
 def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule], df : pd.DataFrame, log : al.Log):
