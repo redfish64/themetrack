@@ -142,7 +142,7 @@ class OverrideRule:
             with al.add_log_context(log,{"replacement_row_index" : row_index,"r_name" : r_name,"r_value" : r_value}):
                 if(r_name in fixed_columns and not self.is_user_rule):
                     al.write_log(log,f"{r_name} was modified by a user_rule, skipping")
-                    next
+                    continue
 
                 updated_val = re.sub(r'\$\{(\w+)\}', replace_var_sub, r_value)
                 old_value = df.at[index,r_name] if r_name in df.columns else None
@@ -162,7 +162,7 @@ def parse_match_columns(s : str):
 
     return holding_columns_str.split(','),pick_columns_str.split(',')
 
-def parse_override_file(fi) -> list[OverrideRule]:
+def parse_override_file(fi,is_user_rules) -> list[OverrideRule]:
     """parses a file containing rules to match and replace data values
 
     Args:
@@ -189,9 +189,10 @@ def parse_override_file(fi) -> list[OverrideRule]:
         #empty row indicates a new rule
         if(row == ['']*4):
             current_rule = None
+            continue
 
         if(current_rule is None):
-            current_rule = OverrideRule(ri)
+            current_rule = OverrideRule(ri,is_user_rules)
             rules.append(current_rule)
         
         match_name,match_value,repl_name,repl_value = row[0:4]
@@ -226,101 +227,188 @@ def get_match_name_list_sorted_by_usage(override_rules):
 
         return [i[0] for i in res]
 
-class MatchTree:
-    def __init__(self) -> None:
-        self.name = None
-        self.match_cond_dict = {}
-        self.regex_match_cond_list = []
-        self.not_apply_mt = None #for rules that don't have this name in them, we skip to the mt here
-        self.exec_rules = []
 
-    def add_match_cond(self,mc_list : list,rule_order : int, rule : OverrideRule, name_sort_order : dict[str,int], next_child_mt=None):
-        if(mc_list == []):
-            self.exec_rules.append((rule_order,rule))
-            return self
-        
-        mc = mc_list[0]
+def merge_dicts(d1 : dict, d2 : dict, fn):
+    d2_copy = d2.copy()
+    for k,v in d1.items():
+        if(k in d2_copy):
+            d2_copy[k] = fn(d1[k],d2_copy.get(k,{}))
+        else:
+            d2_copy[k] = v
 
-        def pass_to_child(next_match_tree):
-            return next_match_tree.add_match_cond(mc_list[1:], rule_order, rule, name_sort_order)
+    return d2_copy
+
+
+#TODO 2: When parsing rules, don't allow any rule to specify the same name twice in match or replacement.
+# First, we haven't made FastOverrideRulesList to handle this. (We could do it, but it would be overly complicated
+# and the user probably never needs to do this). Second, if this is happening, it is in all likelyhood a mistake
+#TODO 2: also don't allow a rule to match the same var twice in different match conditions
+class MatchGroup:
+    def __init__(self,name) -> None:
+        self.name = name
+        self.val_to_ri_set = {} #rules that use a normal match cond
+        self.re_mc_and_ri_set = [] #rules that use a regex match cond
+        self.all_rules = set()  #all rules that are specified in this match condition
+
+    def add_match_cond(self,mc,rule_index : int):
+        if(mc.name != self.name):
+            util.error("Internal error: added wrong match condition")
         
-        if(next_child_mt is None):
-            next_child_mt =  MatchTree()
+        self.all_rules.add(rule_index)
+
+        if(isinstance(mc,ReMatchCondition)):
+            for index,(re_mc,ri_dict) in enumerate(self.re_mc_and_ri_set):
+                #if the regex match is identical to an existing one
+                if(mc.val_re == re_mc.val_re and mc.var_names == re_mc.var_names):
+                    ri_dict.add(rule_index)
+                    return
+
+            #no match so add a new one
+            self.re_mc_and_ri_set.append((mc,{rule_index}))
+            return
+        
+        #normal match conditon
+        dict = self.val_to_ri_set.get(mc.val_str, None)
+        if(dict is None):
+            self.val_to_ri_set[mc] = {rule_index}
+        
+        self.val_to_ri_set[mc].add(rule_index)
+
+    def filter_rules(self,row, existing_rules_to_var_values=None):
+        #this function does an 'or' of self.val_to_ri_set, self.re_mc_and_ri_set, and self.passthrough
+        #and then 'and's that with existing_rules_to_var_values if present, merging any var values
+
+        val = row.get(self.name,'') #TODO 2 should we really use '' here? Probably need to chase down what
+        #we do elsewhere for non existant columns and then make sure we all use the same thing in all cases
+
+        #handle simple match conditions (no regex, and no match vars), by simply adding the rule indexes
+        #that belong to the match for the 'or'
+        or_res = { ri : {} for ri in self.val_to_ri_set.get(val,set())}
+
+        #handle regex matches, with their own var values for the 'or'
+        for re_mc,ri_set in self.re_mc_and_ri_set:
+            #so not to run regex's for values that we will end up not using because they are filtered
+            #already, we do a intersection ahead of time with existing_rules_to_var_values
+            if(existing_rules_to_var_values): 
+                ri_set = (ri_set & existing_rules_to_var_values.keys())
+                
+            #if there are no surviving existing rules then skip the regex
+            if(ri_set == set()):
+                continue
+
+            #match the regex against the value
+            is_match,curr_match_vars = re_mc.matches(row)
+            if(not is_match):
+                continue
             
+            #matched, so add the curr_match_vars to every rule under the current match condition
+            for ri in ri_set:
+                or_res[ri] = curr_match_vars
 
-        if(self.name is None):
-            self.name = mc.name
-        
-        if(self.name == mc.name):
-            if(isinstance(mc,ReMatchCondition)):
-                for index, re_mc,next_match_tree in enumerate(self.regex_match_cond_list):
-                    if(mc.val_re == re_mc.val_re and mc.var_names == re_mc.var_names):
-                        self.regex_match_cond_list[index] = (re_mc,pass_to_child(next_match_tree))
-                        return self
-                
-                #not already existing regex
-                self.regex_match_cond_list.append((mc.val_re,pass_to_child(next_child_mt)))
+        if(existing_rules_to_var_values):
+            res = {}
 
-                return self
-            else: # normal match condition
-                if(mc.value in self.match_cond_dict):
-                    self.match_cond_dict[mc.value] = pass_to_child(self.match_cond_dict[mc.value])
-                    return self
-                
-                #not already there
-                self.match_cond_dict[mc.value] = pass_to_child(next_child_mt)
+            #now 'and' the result with existing rules
+            for ek,ev in existing_rules_to_var_values.items():
+                if(ek in or_res):
+                    res[ek] = ev | or_res #note that we don't have to worry about conflicts, because no rule should specify the same variable twice
+                    #in match conditions 
+                elif(ek not in self.all_rules): # if the rule doesn't have this match condition at all
+                    res[ek] = ev # just let it pass through
+                #else we don't include it, since it was filtered out
+        else:
+            res = or_res
 
-                return self
-        else: #different name
-            my_rank = name_sort_order[self.name]
-            other_rank = name_sort_order[mc.name]
-
-            if(my_rank < other_rank): #if we are to be higher in the tree
-                if(self.not_apply_mt is None):
-                    self.not_apply_mt = next_child_mt
-                self.not_apply_mt = pass_to_child(self.not_apply_mt)
-            else: #we should be lower down
-                parent = MatchTree()
-                return parent.add_match_cond(mc_list,name_sort_order,None, self)
-
-
-    def get_rules(self,row,match_vars={}):
-        val = row[self.name]
-        mc_sub_mt = self.match_cond_dict.get(val,None)
-        res = [] if mc_sub_mt is None else mc_sub_mt.get_rules(row,match_vars)
-        for regex_match_cond,sub_mt in self.regex_match_cond_list:
-            is_match,curr_match_vars = regex_match_cond.matches(row)
-            if(is_match):
-                res.append(sub_mt.get_rules(row,match_vars | curr_match_vars))
-        
-        if(self.not_apply_mt is not None):
-            res.append(self.not_apply_mt.get_rules(row,match_vars))
-        
+        return or_res        
 
 
 class FastOverrideRulesList:
     def __init__(self, override_rules : list[OverrideRule]):
+        """
+        Speeds up override rules, by combining the match conditions so they only have to be run once,
+        no matter how many rules use them.
+
+        WARNING: No rule may specify the same name twice in the match conditions or this will produce
+        inconsistent results.
+        WARNING 2: No rule may specify the same match variable in more than one
+        match condition, or inconsistent results may occur.
+        """
         match_names = get_match_name_list_sorted_by_usage(override_rules)
 
-        root_match_tree = MatchTree()
+        self.match_groups = [MatchGroup(n) for n in match_names]
 
-        match_names_to_sort_key = { n : ni for ni,n in enumerate(match_names)}
+        match_name_to_match_group = dict(zip(match_names,self.match_groups))
 
-        for r in override_rules:
-            #sort the match conditions so the most common ones are first
-            rule_match_conds = sorted(r.match_conditions,key = lambda: match_names_to_sort_key[mc])
+        self.always_exec_rule_indexes = []
 
-            for mc in rule_match_conds:
-                root_match_tree = root_match_tree.add_match_cond(mc)
+        for ri,r in enumerate(override_rules):
+            #if there are no conditions and should always run
+            if(r.match_conditions == []):
+                self.always_exec_rule_indexes.append(ri)
+            else:
+                for mc in r.match_conditions:
+                    match_name_to_match_group[mc.name].add_match_cond(mc,ri)
             
-            curr_match_tree.add_exec_rule(r)
+
+    def filter_matching_rules(self,row):
+        """
+        filters rules to those that match the specified row. 
+        Returns matching rules along with var values according to the regex matches
+        """
+
+        rules_to_var_values = None
+
+        for mg in self.match_groups:
+            rules_to_var_values = mg.filter_rules(row,rules_to_var_values)
         
-        self.root_match_tree = root_match_tree
-
-    def get_rules(self,df,index,log):
-        return self.root_match_tree.get_rules(df[index].to_dict())
+        return rules_to_var_values
 
 
+def create_forl(rules : list[OverrideRule]):
+    return FastOverrideRulesList(rules)
+
+def run_rules_fast(rules : list[OverrideRule], forl : FastOverrideRulesList, df : pd.DataFrame, log : al.Log):
+    """Runs override rules against the data frame quickly
+
+    Args:
+        rules: rules to run
+        forl : call create_forl()
+        df (pd.DataFrame): Dataframe to update
+    """
+    for index in df.index:
+
+        ri_to_var_values = forl.filter_matching_rules(df.iloc[index])
+
+        fixed_columns = {}
+
+        system_rules = []
+        user_rules = []
+        for ri,var_values in ri_to_var_values.items():
+            r = rules[ri]
+            if(r.is_user_rule):
+                user_rules.append((ri,r,var_values))
+            else:
+                system_rules.append((ri,r,var_values))
+
+        for ri in forl.always_exec_rule_indexes:
+            r = rules[ri]
+            if(r.is_user_rule):
+                user_rules.append((ri,r,{}))
+            else:
+                system_rules.append((ri,r,{}))
+
+        system_rules.sort(key=lambda x: x[0])
+        user_rules.sort(key=lambda x: x[0])
+
+        def run_rules(rules):
+            for _,r,var_values in rules:
+                r.apply(var_values,df,index, fixed_columns=fixed_columns,log=log)         
+
+        run_rules(system_rules)
+        run_rules(user_rules)
+        run_rules(system_rules) #run system rules a second time so that any change to match conditions
+        #from user_rules will propagate to the var variables for system rules
+        
 
 def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule], df : pd.DataFrame, log : al.Log):
     """Runs override rules against the data frame.

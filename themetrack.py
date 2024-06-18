@@ -321,7 +321,7 @@ def create_reports(args):
     holdings_df = pd.DataFrame()
 
     fi = util.read_standardized_csv(os.path.join(util.get_installation_directory(),ftypes.SYSTEM_RULES_FILENAME))
-    system_overrides = rules_parser.parse_override_file(fi)
+    system_overrides = rules_parser.parse_override_file(fi,False)
 
     user_overrides = []
     config_file = None
@@ -369,10 +369,16 @@ def create_reports(args):
     else:
         rules_log = al.Log(None,turn_off=True)
 
-    with al.add_log_context(rules_log,{"df": "holdings"}):
-        rules_parser.run_rules(system_overrides,user_overrides,holdings_df,rules_log)
-    with al.add_log_context(rules_log,{"df": "picks"}):
-        rules_parser.run_rules(system_overrides,user_overrides,picks_df,rules_log)
+    if(args.run_rules_slow):
+        with al.add_log_context(rules_log,{"df": "holdings"}):
+            rules_parser.run_rules(system_overrides,user_overrides,holdings_df,rules_log)
+        with al.add_log_context(rules_log,{"df": "picks"}):
+            rules_parser.run_rules(system_overrides,user_overrides,picks_df,rules_log)
+    else:
+        all_rules = system_overrides+user_overrides
+        forl = rules_parser.create_forl(all_rules)
+        rules_parser.run_rules_fast(all_rules,forl,holdings_df,rules_log)
+        rules_parser.run_rules_fast(all_rules,forl,picks_df,rules_log)
 
     res_pd = join_holdings_and_picks(holdings_df,picks_df)
 
@@ -437,6 +443,8 @@ def setup_argparse():
                                        help="The name of the sub-dir to download the capex files into. Defaults to the latest directory.")
     parser_create_reports.add_argument('--rules-log', type=str, 
                                        help=f"Turns on rule logs and specifies the row in the {reports.HOLDINGS_WS_TITLE} to print logs for")
+    parser_create_reports.add_argument('--run-rules-slow', default=False,action='store_true', 
+                                       help=f"If present, the old code slower code for running rules will be used")
     parser_create_reports.set_defaults(func=create_reports)
 
     return parser

@@ -166,7 +166,7 @@ def parse_options(options_csv_iter):
 def parse_config_file(fp):
     wb = op.load_workbook(fp)
     custom_rules = util.read_standardized_csv(wb=wb,worksheet_name=CUSTOM_RULES_SHEETNAME)
-    custom_rules = rules_parser.parse_override_file(custom_rules)
+    custom_rules = rules_parser.parse_override_file(custom_rules,True)
 
     options_csv_iter = util.read_standardized_csv(wb=wb,worksheet_name=OPTIONS_SHEETNAME)
 

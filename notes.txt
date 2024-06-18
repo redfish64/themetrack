@@ -82,3 +82,38 @@ was scraped.
 
 TODO 2: picks report that includes holdings. This is useful for figuring out what other stocks may be part of a particular theme
 ability to add or change columns used in reports, and even decide which reports to show.
+
+
+
+----
+
+
+n1, n2, n3, n4, n5
+
+n1:
+xxx: 1,2,3
+yyy: 4,5
+
+re:
+(${a}foo,(6,7))
+
+passthrough: 8,9
+
+xxx
+........
+1 : {}
+2 : {}
+3 : {}
+8 : {}
+9 : {}
+
+tryfoo
+.........
+6 : {a : 'try'}
+7 : {a : 'try'}
+8 : {}
+9 : {}
+
+n2:
+aaa: 2,4
+bbb: 5,6
