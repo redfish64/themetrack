@@ -133,10 +133,15 @@ class OverrideRule:
             index (_type_): _description_
             is_user_rule (bool, optional): If true, the result of the rule cannot be changed by a non-user rule. Defaults to False.
             fixed_columns: columns that were set by a user rule, and so are fixed and cannot be changed by a system rule running afterwards
+
+        Returns:
+            column names of values that were actually altered
         """
         def replace_var_sub(match):
             var_name = match.group(1)  # Extract the variable name from the match
             return var_subs.get(var_name, match.group(0))  # Return the value or the original string
+
+        altered_columns = set()
 
         for row_index,r_name,r_value in self.replacements:
             with al.add_log_context(log,{"replacement_row_index" : row_index,"r_name" : r_name,"r_value" : r_value}):
@@ -150,9 +155,12 @@ class OverrideRule:
                     if(old_value != updated_val):
                         al.write_log(log,f'Updating from "{old_value}" to "{updated_val}"')
                         df.at[index,r_name] = updated_val
+                        altered_columns.add(r_name)
                     if(self.is_user_rule):
                         al.write_log(log,f'Setting {r_name} as fixed column')
                         fixed_columns[r_name] = True
+    
+        return altered_columns
     
 def parse_match_columns(s : str):
     m = re.match(r'([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))\s*=\s*([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))$',s)
@@ -248,13 +256,13 @@ class MatchGroup:
         self.name = name
         self.val_to_ri_set = {} #rules that use a normal match cond
         self.re_mc_and_ri_set = [] #rules that use a regex match cond
-        self.all_rules = set()  #all rules that are specified in this match condition
+        self.all_ri = set()  #all rules that are specified in this match condition
 
     def add_match_cond(self,mc,rule_index : int):
         if(mc.name != self.name):
             util.error("Internal error: added wrong match condition")
         
-        self.all_rules.add(rule_index)
+        self.all_ri.add(rule_index)
 
         if(isinstance(mc,ReMatchCondition)):
             for index,(re_mc,ri_dict) in enumerate(self.re_mc_and_ri_set):
@@ -268,33 +276,37 @@ class MatchGroup:
             return
         
         #normal match conditon
-        dict = self.val_to_ri_set.get(mc.val_str, None)
-        if(dict is None):
-            self.val_to_ri_set[mc] = {rule_index}
-        
-        self.val_to_ri_set[mc].add(rule_index)
+        ri_set = self.val_to_ri_set.setdefault(mc.val_str, set())
+        ri_set.add(rule_index)
 
-    def filter_rules(self,row, existing_rules_to_var_values=None):
-        #this function does an 'or' of self.val_to_ri_set, self.re_mc_and_ri_set, and self.passthrough
-        #and then 'and's that with existing_rules_to_var_values if present, merging any var values
+    def filter_rules_for_mc(self,row, is_user_rules, rules, last_run_ri):
+        """
+        does an 'or' of self.val_to_ri_set, self.re_mc_and_ri_set, and self.passthrough,
+        returning all rule indexes that matches along with their var values
+        """
 
         val = row.get(self.name,'') #TODO 2 should we really use '' here? Probably need to chase down what
         #we do elsewhere for non existant columns and then make sure we all use the same thing in all cases
 
         #handle simple match conditions (no regex, and no match vars), by simply adding the rule indexes
-        #that belong to the match for the 'or'
-        or_res = { ri : {} for ri in self.val_to_ri_set.get(val,set())}
+        #that belong to the match for the 'or' and are part of the rules that can match
+        res = { ri : {} for ri in self.val_to_ri_set.get(val,set()) if (ri > last_run_ri and
+                                                                         rules[ri].is_user_rule == is_user_rules)}
 
         #handle regex matches, with their own var values for the 'or'
         for re_mc,ri_set in self.re_mc_and_ri_set:
-            #so not to run regex's for values that we will end up not using because they are filtered
-            #already, we do a intersection ahead of time with existing_rules_to_var_values
-            if(existing_rules_to_var_values): 
-                ri_set = (ri_set & existing_rules_to_var_values.keys())
-                
+            ri_set = { ri for ri in ri_set if (ri > last_run_ri and
+                                               rules[ri].is_user_rule == is_user_rules)}
+
             #if there are no surviving existing rules then skip the regex
             if(ri_set == set()):
                 continue
+
+            #H*CK
+            # for ri in ri_set:
+            #     if(rules[ri].row_index == 45):
+            #         print("bbbb")
+            #         break
 
             #match the regex against the value
             is_match,curr_match_vars = re_mc.matches(row)
@@ -303,27 +315,13 @@ class MatchGroup:
             
             #matched, so add the curr_match_vars to every rule under the current match condition
             for ri in ri_set:
-                or_res[ri] = curr_match_vars
+                res[ri] = curr_match_vars
 
-        if(existing_rules_to_var_values):
-            res = {}
-
-            #now 'and' the result with existing rules
-            for ek,ev in existing_rules_to_var_values.items():
-                if(ek in or_res):
-                    res[ek] = ev | or_res #note that we don't have to worry about conflicts, because no rule should specify the same variable twice
-                    #in match conditions 
-                elif(ek not in self.all_rules): # if the rule doesn't have this match condition at all
-                    res[ek] = ev # just let it pass through
-                #else we don't include it, since it was filtered out
-        else:
-            res = or_res
-
-        return or_res        
+        return res        
 
 
 class FastOverrideRulesList:
-    def __init__(self, override_rules : list[OverrideRule]):
+    def __init__(self, rules : list[OverrideRule]):
         """
         Speeds up override rules, by combining the match conditions so they only have to be run once,
         no matter how many rules use them.
@@ -333,15 +331,20 @@ class FastOverrideRulesList:
         WARNING 2: No rule may specify the same match variable in more than one
         match condition, or inconsistent results may occur.
         """
-        match_names = get_match_name_list_sorted_by_usage(override_rules)
 
-        self.match_groups = [MatchGroup(n) for n in match_names]
+        self.rules = rules
+
+        match_names = get_match_name_list_sorted_by_usage(rules)
+
+        self.match_groups : list[MatchGroup] = [MatchGroup(n) for n in match_names]
+
+        self.match_names_to_mg_index = { mn : index for index,mn in enumerate(match_names)}
 
         match_name_to_match_group = dict(zip(match_names,self.match_groups))
 
         self.always_exec_rule_indexes = []
 
-        for ri,r in enumerate(override_rules):
+        for ri,r in enumerate(rules):
             #if there are no conditions and should always run
             if(r.match_conditions == []):
                 self.always_exec_rule_indexes.append(ri)
@@ -350,18 +353,80 @@ class FastOverrideRulesList:
                     match_name_to_match_group[mc.name].add_match_cond(mc,ri)
             
 
-    def filter_matching_rules(self,row):
+    def filter_matching_rules(self,row,is_user_rules,matching_data,last_run_rule_index):
         """
         filters rules to those that match the specified row. 
-        Returns matching rules along with var values according to the regex matches
+        alters matching_data according to the result. 
+        """
+        matching_group_data = matching_data[1]
+        for i in range(len(matching_group_data)):
+            if(matching_group_data[i] is not None): #if already cached, skip
+                continue
+            
+            matching_group_data[i] = self.match_groups[i].filter_rules_for_mc(row,is_user_rules,self.rules,last_run_rule_index)
+        
+    
+    def create_empty_match_data(self):
+        return (self.always_exec_rule_indexes,[None for mc in self.match_groups])
+    
+    def reset_match_data(self,match_data, altered_columns):
+        match_groups = match_data[1]
+        for name in altered_columns:
+            mg_index = self.match_names_to_mg_index.get(name,-1)
+
+            #sometimes running a rule can modify a column
+            #that is not being used as a key for another rule
+            #in this case we can just ignore it.
+            if(mg_index == -1):
+                continue
+            match_groups[self.match_names_to_mg_index[name]] = None
+    
+    def get_lowest_matching_ri(self,match_data,is_user_rules,last_ri):
+        """
+        Finds the lowest ri existing in all the match data that is greater than last_ri (user or system rules
+        depending on parameter)
+        Also looks within rules that always match
         """
 
-        rules_to_var_values = None
+        #match data contains the rules that each match_group matched.
+        #match_group contains all the rules that it considered (anything outside of this didn't try to match the name,
+        # and therefore should always be accepted)
+        #So we keep track of the ri's that the match_group included and those that it excluded (those in it but that didn't
+        # match)
+        accepted_ri_set = set()
+        excluded_ri_set = set()
 
-        for mg in self.match_groups:
-            rules_to_var_values = mg.filter_rules(row,rules_to_var_values)
-        
-        return rules_to_var_values
+        for md,mg in zip(match_data[1],self.match_groups):
+            
+            accepted_ri_set = accepted_ri_set | md.keys()
+
+            curr_excluded_ri_set = mg.all_ri - md.keys()
+            excluded_ri_set = excluded_ri_set | curr_excluded_ri_set
+
+        curr_ri_set = accepted_ri_set - excluded_ri_set
+
+        lowest_ri = None
+        for ri in curr_ri_set:
+            if self.rules[ri].is_user_rule == is_user_rules and ri > last_ri and (lowest_ri is None or lowest_ri > ri):
+                lowest_ri = ri
+
+        #check if there is a rule that always runs (no match conditions) that should run first
+        always_exec = False
+        for ri in self.always_exec_rule_indexes:
+            if self.rules[ri].is_user_rule == is_user_rules and ri > last_ri and (lowest_ri is None or lowest_ri > ri):
+                lowest_ri = ri
+                always_exec = True
+
+        if(always_exec):
+            return lowest_ri,{}
+
+        var_values = {}
+        for ri_dict in match_data[1]:
+            var_values = var_values | ri_dict.get(lowest_ri,{})
+
+        return lowest_ri,var_values
+        #TODO 3 Consider getting rid of rules proper in forl, it is only needed for is_user_rules
+            
 
 
 def create_forl(rules : list[OverrideRule]):
@@ -375,39 +440,41 @@ def run_rules_fast(rules : list[OverrideRule], forl : FastOverrideRulesList, df 
         forl : call create_forl()
         df (pd.DataFrame): Dataframe to update
     """
+
     for index in df.index:
 
-        ri_to_var_values = forl.filter_matching_rules(df.iloc[index])
+        #we have to run each rule one by one since rules change the input data of any rule that
+        #happens after it
 
+        #fixed columns are columns that are changed by user rules. If this happens 
+        #then the system rules cannot override
         fixed_columns = {}
+        
+        def run_rules(is_user_rules):
+            last_ri = -1
+            match_data = forl.create_empty_match_data()
 
-        system_rules = []
-        user_rules = []
-        for ri,var_values in ri_to_var_values.items():
-            r = rules[ri]
-            if(r.is_user_rule):
-                user_rules.append((ri,r,var_values))
-            else:
-                system_rules.append((ri,r,var_values))
+            while True:
+                row = df.iloc[index]
+        
+                forl.filter_matching_rules(row,is_user_rules,match_data, last_ri)
+                ri,var_values = forl.get_lowest_matching_ri(match_data,is_user_rules,last_ri)
+                if(ri is None):
+                    break
 
-        for ri in forl.always_exec_rule_indexes:
-            r = rules[ri]
-            if(r.is_user_rule):
-                user_rules.append((ri,r,{}))
-            else:
-                system_rules.append((ri,r,{}))
+                last_ri = ri
+                
+                altered_columns = rules[ri].apply(var_values,df,index, fixed_columns=fixed_columns,log=log)         
+                forl.reset_match_data(match_data,altered_columns)
 
-        system_rules.sort(key=lambda x: x[0])
-        user_rules.sort(key=lambda x: x[0])
+        #run the system rules    
+        run_rules(False)
+        #run the user rules
+        run_rules(True)
+        #run the system rules again, so any change by the user rule will be propagated to the system rule
+        #(note this will not overwrite values set by user rules, which become fixed columns)
+        run_rules(False)
 
-        def run_rules(rules):
-            for _,r,var_values in rules:
-                r.apply(var_values,df,index, fixed_columns=fixed_columns,log=log)         
-
-        run_rules(system_rules)
-        run_rules(user_rules)
-        run_rules(system_rules) #run system rules a second time so that any change to match conditions
-        #from user_rules will propagate to the var variables for system rules
         
 
 def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule], df : pd.DataFrame, log : al.Log):
@@ -434,7 +501,7 @@ def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule]
                     (does_match,var_subs) = r.matches(df,index,log=log)
                     if(does_match):
                         al.write_log(log, "matched.")
-                        r.apply(var_subs,df,index, is_user_rule=is_user_rules, fixed_columns=fixed_columns,log=log)
+                        r.apply(var_subs,df,index, fixed_columns=fixed_columns,log=log)
                         any_rule_matched = True
                     else:
                         al.write_log(log, "did not match.")
