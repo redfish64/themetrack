@@ -108,8 +108,7 @@ class OverrideRule:
         self.replacements.append((ri,repl_name,repl_value))
 
 
-    def matches(self,df,index,log):
-        row = df.iloc[index]
+    def matches(self,row,log):
 
         var_subs = {}
         for mc in self.match_conditions:
@@ -124,13 +123,10 @@ class OverrideRule:
         
         return (True, var_subs)
     
-    def apply(self,var_subs,df,index, log, fixed_columns = {}):
+    def apply(self,var_subs,row, log, fixed_columns = {}):
         """_summary_
 
         Args:
-            var_subs (_type_): _description_
-            df (_type_): _description_
-            index (_type_): _description_
             is_user_rule (bool, optional): If true, the result of the rule cannot be changed by a non-user rule. Defaults to False.
             fixed_columns: columns that were set by a user rule, and so are fixed and cannot be changed by a system rule running afterwards
 
@@ -150,11 +146,11 @@ class OverrideRule:
                     continue
 
                 updated_val = re.sub(r'\$\{(\w+)\}', replace_var_sub, r_value)
-                old_value = df.at[index,r_name] if r_name in df.columns else None
+                old_value = row.get(r_name,None)
                 if(self.is_user_rule or r_name not in fixed_columns):
                     if(old_value != updated_val):
                         al.write_log(log,f'Updating from "{old_value}" to "{updated_val}"')
-                        df.at[index,r_name] = updated_val
+                        row[r_name] = updated_val
                         altered_columns.add(r_name)
                     if(self.is_user_rule):
                         al.write_log(log,f'Setting {r_name} as fixed column')
@@ -432,7 +428,7 @@ class FastOverrideRulesList:
 def create_forl(rules : list[OverrideRule]):
     return FastOverrideRulesList(rules)
 
-def run_rules_fast(rules : list[OverrideRule], forl : FastOverrideRulesList, df : pd.DataFrame, log : al.Log):
+def run_rules_alt_method(rules : list[OverrideRule], forl : FastOverrideRulesList, df : pd.DataFrame, log : al.Log):
     """Runs override rules against the data frame quickly
 
     Args:
@@ -441,22 +437,19 @@ def run_rules_fast(rules : list[OverrideRule], forl : FastOverrideRulesList, df 
         df (pd.DataFrame): Dataframe to update
     """
 
-    for index in df.index:
-
-        #we have to run each rule one by one since rules change the input data of any rule that
-        #happens after it
-
+    def update_row(row):
         #fixed columns are columns that are changed by user rules. If this happens 
         #then the system rules cannot override
         fixed_columns = {}
         
         def run_rules(is_user_rules):
+            #we have to run each rule one by one since rules change the input data of any rule that
+            #happens after it
+
             last_ri = -1
             match_data = forl.create_empty_match_data()
 
-            while True:
-                row = df.iloc[index]
-        
+            while(True):
                 forl.filter_matching_rules(row,is_user_rules,match_data, last_ri)
                 ri,var_values = forl.get_lowest_matching_ri(match_data,is_user_rules,last_ri)
                 if(ri is None):
@@ -464,7 +457,7 @@ def run_rules_fast(rules : list[OverrideRule], forl : FastOverrideRulesList, df 
 
                 last_ri = ri
                 
-                altered_columns = rules[ri].apply(var_values,df,index, fixed_columns=fixed_columns,log=log)         
+                altered_columns = rules[ri].apply(var_values,row, fixed_columns=fixed_columns,log=log)         
                 forl.reset_match_data(match_data,altered_columns)
 
         #run the system rules    
@@ -475,6 +468,11 @@ def run_rules_fast(rules : list[OverrideRule], forl : FastOverrideRulesList, df 
         #(note this will not overwrite values set by user rules, which become fixed columns)
         run_rules(False)
 
+        return row
+
+    df = df.apply(update_row,axis=1)
+
+    return df
         
 
 def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule], df : pd.DataFrame, log : al.Log):
@@ -489,8 +487,8 @@ def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule]
         df (pd.DataFrame): Dataframe to update
     """
 
-    for index in df.index:
-
+    def update_row(row_orig):
+        row = row_orig.to_dict()
         fixed_columns = {}
         
         def run_rules(rules : list[OverrideRule],log, is_user_rules):
@@ -498,17 +496,17 @@ def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule]
 
             for r in rules:
                 with al.add_log_context(log, {"rule_row_index": r.row_index}):
-                    (does_match,var_subs) = r.matches(df,index,log=log)
+                    (does_match,var_subs) = r.matches(row,log=log)
                     if(does_match):
                         al.write_log(log, "matched.")
-                        r.apply(var_subs,df,index, fixed_columns=fixed_columns,log=log)
+                        r.apply(var_subs,row, fixed_columns=fixed_columns,log=log)
                         any_rule_matched = True
                     else:
                         al.write_log(log, "did not match.")
             
             return any_rule_matched
 
-        with al.add_log_context(log, {"df_index" : index}):
+        with al.add_log_context(log, {"df_index" : row_orig.index}):
             with al.add_log_context(log, {"rule_set": "system_rules pass 1"}):
                 run_rules(system_rules,log, False)
             with al.add_log_context(log, {"rule_set": "user_rules"}):
@@ -517,6 +515,9 @@ def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule]
                 with al.add_log_context(log, {"rule_set": "system_rules pass 2"}):
                     run_rules(system_rules,log, False)
 
+        return row
+    
+    return pd.DataFrame(df.apply(lambda row: update_row(row), axis=1).tolist())
 
 if __name__ == '__main__':
     parse_override_file(sys.argv[1])

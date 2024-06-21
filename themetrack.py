@@ -369,16 +369,16 @@ def create_reports(args):
     else:
         rules_log = al.Log(None,turn_off=True)
 
-    if(args.run_rules_slow):
-        with al.add_log_context(rules_log,{"df": "holdings"}):
-            rules_parser.run_rules(system_overrides,user_overrides,holdings_df,rules_log)
-        with al.add_log_context(rules_log,{"df": "picks"}):
-            rules_parser.run_rules(system_overrides,user_overrides,picks_df,rules_log)
-    else:
-        all_rules = system_overrides+user_overrides
-        forl = rules_parser.create_forl(all_rules)
-        rules_parser.run_rules_fast(all_rules,forl,holdings_df,rules_log)
-        rules_parser.run_rules_fast(all_rules,forl,picks_df,rules_log)
+    with al.add_log_context(rules_log,{"df": "holdings"}):
+        holdings_df = rules_parser.run_rules(system_overrides,user_overrides,holdings_df,rules_log)
+    with al.add_log_context(rules_log,{"df": "picks"}):
+        picks_df = rules_parser.run_rules(system_overrides,user_overrides,picks_df,rules_log)
+
+    #co: PERF: if we have 1000's of rules this may be faster, don't know. Not well tested!
+    # all_rules = system_overrides+user_overrides
+    # forl = rules_parser.create_forl(all_rules)
+    # holdings_df = rules_parser.run_rules_alt_method(all_rules,forl,holdings_df,rules_log)
+    # picks_df = rules_parser.run_rules_alt_method(all_rules,forl,picks_df,rules_log)
 
     res_pd = join_holdings_and_picks(holdings_df,picks_df)
 
@@ -443,8 +443,9 @@ def setup_argparse():
                                        help="The name of the sub-dir to download the capex files into. Defaults to the latest directory.")
     parser_create_reports.add_argument('--rules-log', type=str, 
                                        help=f"Turns on rule logs and specifies the row in the {reports.HOLDINGS_WS_TITLE} to print logs for")
-    parser_create_reports.add_argument('--run-rules-slow', default=False,action='store_true', 
-                                       help=f"If present, the old code slower code for running rules will be used")
+    # PERF: If we have thousands of rules this may be faster
+    # parser_create_reports.add_argument('--run-rules-alt', default=False,action='store_true', 
+    #                                    help=f"If present, the alternative complicated not very well tested bad code for running rules will be used")
     parser_create_reports.set_defaults(func=create_reports)
 
     return parser
