@@ -60,7 +60,7 @@ def parse_always_show_pick(rows,base_ri):
 
     for row_ri,row in enumerate(rows):
         if(row[0] not in ftypes.SHORT_NAME_TO_PICK_TYPE):
-            util.csv_error(row,base_ri + row_ri,1,f"Pick type must be one of {",".join(ftypes.SHORT_NAME_TO_PICK_TYPE.keys())}")
+            util.csv_error(row,base_ri + row_ri,1,f'Pick type must be one of {",".join(ftypes.SHORT_NAME_TO_PICK_TYPE.keys())}')
         bf = ftypes.PICK_TYPE_TO_BIT_FLAG[ftypes.SHORT_NAME_TO_PICK_TYPE[row[0]]]
         total_bf = (total_bf | bf)
 
