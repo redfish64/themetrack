@@ -15,7 +15,6 @@ import rules_parser
 import schwab_parser
 import pandas as pd
 import ftypes
-import forex
 import reports
 import external
 import scraper_util
