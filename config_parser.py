@@ -1,6 +1,5 @@
 import re
 import openpyxl as op
-from torch import fix_
 import util
 import rules_parser
 import util
