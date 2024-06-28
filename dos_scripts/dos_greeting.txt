@@ -1,0 +1,6 @@
+Welcome to ThemeTrack!
+
+Run the following to get started:
+
+tt.bat
+
