@@ -15,6 +15,9 @@ THEME_TRACK_CONFIG_FILE = 'theme_track_config.xlsx'
 FOREX_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref.zip'
 FOREX_FILENAME = 'forex.zip'
 
+WELCOME_BAT_FILE = 'welcome.bat'
+WELCOME_BAT_ENV = 'IN_WELCOME_BAT'
+
 class PickType(Enum):
     CapexTotalPortfolio = auto(),
     CapexSkeletonPortfolio = auto(),

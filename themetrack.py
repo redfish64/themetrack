@@ -5,6 +5,7 @@ import argparse
 import pathlib
 import re
 import shutil
+import subprocess
 import sys
 
 import urllib
@@ -21,6 +22,7 @@ import scraper_util
 import config_parser
 import array_log as al
 from currency_converter import CurrencyConverter
+import platform
 
 CREATE_SNAPSHOT_COMMAND = 'create-snapshot'
 CREATE_REPORTS_COMMAND = 'create-reports'
@@ -449,15 +451,45 @@ def setup_argparse():
 
     return parser
 
-default_main_dir = get_main_dir()
+def is_windows():
+    system = platform.system()
+    return system == "Windows"
 
-parser = setup_argparse()
+def run_batch_file(filename):
+    # Get the current directory
+    current_directory = os.path.dirname(os.path.abspath(__file__))
+    
+    # Path to the batch file
+    batch_file_path = os.path.join(current_directory, filename)
+    
+    try:
+        # Run the batch file
+        result = subprocess.run(batch_file_path, shell=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error occurred while executing batch file: {e}")
 
-args = parser.parse_args()
+def in_welcome_bat():
+    return os.getenv(ftypes.WELCOME_BAT_ENV)
 
-# Call the appropriate function based on the command
-if args.command:
-    args.func(args)
-else:
-    parser.print_help()
+
+if __name__ == '__main__':
+    if(len(sys.argv) == 1 and is_windows() and not in_welcome_bat()):
+        #we think we've been double-clicked in windows
+        #in this case we open up a dos-prompt as are impromptu user interface and let the user loose!
+
+        run_batch_file(ftypes.WELCOME_BAT_FILE)
+        exit(0)
+
+
+    default_main_dir = get_main_dir()
+
+    parser = setup_argparse()
+
+    args = parser.parse_args()
+
+    # Call the appropriate function based on the command
+    if args.command:
+        args.func(args)
+    else:
+        parser.print_help()
 
