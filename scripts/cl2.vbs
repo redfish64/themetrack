@@ -1,23 +1,25 @@
-Create_ShortCut "C:\WINDOWS\NOTEPAD.EXE", "Desktop", "Notepad", "test arg", , WshNormalFocus
- 
-Private Sub Create_ShortCut(ByVal sTargetPath As String, ByVal sShortCutPath As String, ByVal sShortCutName As String, _
-                            Optional ByVal sArguments As String, Optional ByVal sWorkPath As String, _
-                            Optional ByVal eWinStyle As WshWindowStyle = vbNormalFocus, Optional ByVal iIconNum As Integer)
-    ' Requires reference to Windows Script Host Object Model
-    Dim oShell As IWshRuntimeLibrary.WshShell
-    Dim oShortCut As IWshRuntimeLibrary.WshShortcut
-    
-    Set oShell = New IWshRuntimeLibrary.WshShell
-    Set oShortCut = oShell.CreateShortcut(oShell.SpecialFolders(sShortCutPath) & _
-                                          "\" & sShortCutName & ".lnk")
-    With oShortCut
-        .TargetPath = sTargetPath
-        .Arguments = sArguments
-        .WorkingDirectory = sWorkPath
-        .WindowStyle = eWinStyle
-        .IconLocation = sTargetPath & "," & iIconNum
-        .Save
-    End With
-    
-    Set oShortCut = Nothing: Set oShell = Nothing
-End Sub
+Set oWS = WScript.CreateObject("WScript.Shell")
+Set oFSO = CreateObject("Scripting.FileSystemObject")
+
+' Get the path of the current script
+currentDir = oFSO.GetParentFolderName(WScript.ScriptFullName)
+
+' Define relative paths
+shortcutName = "shortcut.lnk"
+targetPath = "your_script.bat"
+iconPath = "your_icon.ico"
+
+' Combine the current directory with the relative paths
+sLinkFile = oFSO.BuildPath(currentDir, shortcutName)
+targetFullPath = oFSO.BuildPath(currentDir, targetPath)
+iconFullPath = oFSO.BuildPath(currentDir, iconPath)
+
+' Create the shortcut
+Set oLink = oWS.CreateShortcut(sLinkFile)
+oLink.TargetPath = targetFullPath
+oLink.WorkingDirectory = currentDir
+oLink.IconLocation = iconFullPath
+oLink.Description = "Themetrack Program"
+oLink.Save
+
+WScript.Echo "Shortcut created at " & sLinkFile
