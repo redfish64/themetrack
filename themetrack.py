@@ -478,7 +478,7 @@ if __name__ == '__main__':
         #in this case we open up a dos-prompt as are impromptu user interface and let the user loose!
 
         run_batch_file(ftypes.WELCOME_BAT_FILE)
-        exit(0)
+        sys.exit(0)
 
 
     default_main_dir = get_main_dir()

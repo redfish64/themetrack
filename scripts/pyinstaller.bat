@@ -1,8 +1,5 @@
-#pyinstaller.exe themetrack.py  --add-data theme_track_config.xlsx:. --add-data system_rules.xlsx:. --add-data dos_scripts/dos_greeting.txt:. --add-data dos_scripts/themetrack.bat:. --add-data dos_scripts/tt.bat:.
-cd /d %~dp0
-cd ..
-pyinstaller.exe --onefile --name themetrack --icon=images\themetrack.ico themetrack.py
-copy theme_track_config.xlsx dist\ 
-copy system_rules.xlsx dist\
-copy dos_scripts\*.* dist\
+pyinstaller.exe themetrack.py --onefile  --add-data theme_track_config.xlsx:. ^
+--add-data system_rules.xlsx:. ^
+--add-data dos_scripts/dos_greeting.txt:dos_scripts ^
+--add-data dos_scripts/themetrack.bat:dos_scripts
 
