@@ -28,12 +28,18 @@ def get_dict_tree_value_by_path(tree, path):
 
 def read_capex_portfolio_html(opener):
         url = "https://capexinsider.com/login/portfolio/"
+
         capex_html = opener.open(url).read()
         capex_soup = BeautifulSoup(capex_html, "html.parser")
 
         infogram_urls = [f'https://e.infogram.com/{ie["data-id"]}' for ie in capex_soup.find_all("div",{"class":"infogram-embed"})]
 
-        infogram_html_list = [ opener.open(url).read() for url in infogram_urls]
+        print(f"Found {len(infogram_urls)} html urls")
+
+        infogram_html_list = []
+        for i,url in enumerate(infogram_urls):
+            print(f"Reading html data {i}")
+            infogram_html_list.append(opener.open(url).read())
 
         data_urls = []
 
@@ -64,7 +70,14 @@ def read_capex_portfolio_html(opener):
                 if(url is not None):
                     data_urls.append(url)
 
-        table_data = [opener.open(data_url).read() for data_url in data_urls]
+        table_data = []
+
+        print(f"Found {len(data_urls)} table urls")
+
+        for i,data_url in enumerate(data_urls):
+            print(f"Reading table url {i}")
+
+            table_data.append(opener.open(data_url).read())
 
         return(capex_html,infogram_html_list,table_data)
 
@@ -108,7 +121,6 @@ def convert_capex_portfolio_data_to_pandas(td_json):
                 add_cell(ri,c['value'],ch)
                 if('href' in c):
                     add_cell(ri,c['href'],ch+"_href")
-            else:
                 add_cell(ri,c,ch)
 
     #make sure all the columns are of equal length (if some rows don't have hrefs for some cells, they may not be the same length)
