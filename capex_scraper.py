@@ -121,6 +121,7 @@ def convert_capex_portfolio_data_to_pandas(td_json):
                 add_cell(ri,c['value'],ch)
                 if('href' in c):
                     add_cell(ri,c['href'],ch+"_href")
+            else:
                 add_cell(ri,c,ch)
 
     #make sure all the columns are of equal length (if some rows don't have hrefs for some cells, they may not be the same length)
