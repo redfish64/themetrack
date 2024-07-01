@@ -10,12 +10,13 @@ import ftypes
 import re
 import pandas as pd
 
-SCHWAB_HEADERS = ("Symbol,Description,Quantity,Price,Price Change %,Price Change $,Market Value,Day Change %,Day Change $,Cost Basis"
-                 ",Gain/Loss %,Gain/Loss $,Ratings,Reinvest Dividends?,Capital Gains?,% Of Account,Security Type").split(",")
+SCHWAB_HEADERS = ['Symbol', 'Description', 'Qty (Quantity)', 'Price', 'Price Chng % (Price Change %)', 'Price Chng $ (Price Change $)', 
+                  'Mkt Val (Market Value)', 'Day Chng % (Day Change %)', 'Day Chng $ (Day Change $)', 'Cost Basis', 'Gain % (Gain/Loss %)',
+                  'Gain $ (Gain/Loss $)', 'Ratings', 'Reinvest?', 'Reinvest Capital Gains?', '% of Acct (% of Account)', 'Security Type']
 
-SCHWAB_NUMERIC_HEADERS = ['Quantity', 'Price', 'Price Change %',
-       'Price Change $', 'Market Value', 'Day Change %', 'Day Change $',
-       'Cost Basis', 'Gain/Loss %', 'Gain/Loss $', '% Of Account']
+SCHWAB_NUMERIC_HEADERS = ['Qty (Quantity)', 'Price', 'Price Chng % (Price Change %)', 'Price Chng $ (Price Change $)', 
+                  'Mkt Val (Market Value)', 'Day Chng % (Day Change %)', 'Day Chng $ (Day Change $)', 'Cost Basis', 'Gain % (Gain/Loss %)',
+                  'Gain $ (Gain/Loss $)', '% of Acct (% of Account)']
 
 
 
