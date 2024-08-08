@@ -117,3 +117,49 @@ tryfoo
 n2:
 aaa: 2,4
 bbb: 5,6
+
+2024/08/07
+
+New idea to make it simpler:
+
+The idea is that we want the report to allow us to see if we are implementing the newsletter category properly
+that we chose. But also, we may want to take into account other things that we own that loosely fall into the
+sector.
+
+For each report type, we have a chosen category: asymmetric, skeleton, or dividend.
+
+From there, we have stocks in that category and outside that category (but that may be in the same sector).
+So for stocks in that category, we list them regardless if invested in or not.
+
+For stocks outside that category, they get placed in an "other" sector.
+The category/cat. sector(s) of each stock is clearly displayed in the other sector.
+
+The user can then add rules, stating that for a chosen category, for example asymmetric,
+that another category/cat. sector is the same thing as a sector within the category. In
+this case it will still be displayed in an "other" section but that "other" section will
+be immediately under the sector.
+
+So there would be a rule, such as
+Asymmetric Report:
+* Skel/Oil Gas -> Oil
+
+This would allow the user to see that they still have a lot invested in a particular sector,
+but in stocks not directly within the particular category stocks themselves.
+
+
+For cases where a holding stock isn't matched properly to a newsletter stock, we have
+a rule called Match:
+Brokerage: xxx
+Exchange: yyy
+Stock: zzz
+
+Newsletter
+Exchange: www
+Stock: vvv
+
+
+Finally we have a clear page which lists which holdings match which newsletter picks
+(not the big mess of all columns we have now)
+
+
+We get rid of the Replace rule, which can be used to implement the above internally.

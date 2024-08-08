@@ -493,3 +493,5 @@ if __name__ == '__main__':
     else:
         parser.print_help()
 
+#TODO 2 make the first report show the combined portfolios of all themes, so
+#user can easily see which are from skeleton, total or both
