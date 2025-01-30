@@ -163,3 +163,15 @@ Finally we have a clear page which lists which holdings match which newsletter p
 
 
 We get rid of the Replace rule, which can be used to implement the above internally.
+
+
+-----
+
+What about incorporating stock price changes, buys and sells. How to display this, first of all?
+
+IRR internal rate of return
+TWR time weighted return - divide into segments between each event, calculate gain/loss and multiply (1.00 + g)*(1.00 + g2)...
+MWR money weighted return - involves calculating the IRR, I think we could do this as well.
+
+
+
