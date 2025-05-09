@@ -2,7 +2,7 @@
 """
 from calendar import c
 import math
-from numpy import NaN
+from numpy import nan
 import openpyxl as op
 import sys
 

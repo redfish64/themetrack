@@ -13,8 +13,18 @@ import util
 import pandas as pd
 import datetime
 import scraper_util
+from ftypes import PickType
 import ftypes
 
+
+#index of key to type of data. This is a list because this is also the order we get 
+#the data in (ie. 'Total Portfolio' comes first, etc.)
+CAPEX_ID_TO_TYPE = [('6ce881df-bfd9-4b15-b6d5-e2f2419729c6', PickType.CapexTotalPortfolio),
+                    ('100a4630-266d-4b57-ad2d-df5df49666f1', PickType.CapexDiviPortfolio),
+                    ('ea14de63-4993-4c24-925e-c5d06e31604d', PickType.CapexBig5),
+                    ('722013a3-0f6c-4663-a296-88e3dc3c28c4', PickType.CapexSkeletonPortfolio),
+                    ('ed3f781c-f68a-4e54-9b9c-e59c3289766a', PickType.CapexClosed),
+]
 
 def get_dict_tree_value_by_path(tree, path):
     current = tree
@@ -61,28 +71,47 @@ def read_capex_portfolio_html(opener):
             entities = data["elements"]["content"]["content"]["entities"]
 
             for key in entities.keys():
-                url = get_dict_tree_value_by_path(entities[key],["props","chartData","custom","live","url"])
-                if(url is None):
-                    live_key = get_dict_tree_value_by_path(entities[key],["props","chartData","custom","live","key"])
-                    live_provider = get_dict_tree_value_by_path(entities[key],["props","chartData","custom","live","provider"])
-                    if(live_provider == "atlas_google_drive"):
-                        url = f"https://atlas.jifo.co/api/connectors/{live_key}"
+                #co: the url seems to be wrong nowadays
+                #url = get_dict_tree_value_by_path(entities[key],["props","chartData","custom","live","url"])
+
+                live_key = get_dict_tree_value_by_path(entities[key],["props","chartData","custom","live","key"])
+                live_provider = get_dict_tree_value_by_path(entities[key],["props","chartData","custom","live","provider"])
+                #if(live_provider == "atlas_google_drive"):
+                if(live_key is not None):
+                    url = f"https://live-data.jifo.co/{live_key}"
+                else:
+                    print(f"No live key for live provider {live_provider}, url {url}")
+
                 if(url is not None):
-                    data_urls.append(url)
+                    data_urls.append((live_key,url))
 
         table_data = []
 
         print(f"Found {len(data_urls)} table urls")
 
-        for i,data_url in enumerate(data_urls):
-            print(f"Reading table url {i}")
+        for i,(key,data_url) in enumerate(data_urls):
+            print(f"Reading table url {i}, {data_url}")
 
-            table_data.append(opener.open(data_url).read())
-
+            try:
+                table_data.append((key,opener.open(data_url).read()))
+            except Exception as e:
+                print(f"Read failed, {e}")
+        
         return(capex_html,infogram_html_list,table_data)
 
 
-def convert_capex_portfolio_data_to_pandas(td_json):
+def extract_index_and_id_from_filename(filename):
+    pattern = r'capex_data_(\d+)_([0-9a-f-]+)\.json'
+    match = re.match(pattern, filename)
+    if match:
+        return int(match.group(1)), match.group(2)
+    raise ValueError("Invalid filename format")
+
+
+def convert_capex_portfolio_data_to_pandas(fn,td_json):
+
+    (index,id) = extract_index_and_id_from_filename(fn)
+
     td = json.loads(td_json.decode())
     #convert data to pandas
     table = td['data'][0]
@@ -130,9 +159,14 @@ def convert_capex_portfolio_data_to_pandas(td_json):
 
     res =  pd.DataFrame(out_table)
 
-    fn = td['fileName']
-    pick_type = ftypes.CAPEX_FILENAME_TO_PICK_TYPE[fn].name
-    refreshed_date = datetime.datetime.fromtimestamp(int(td['refreshed'])/1000)
+    for capex_id, pt in CAPEX_ID_TO_TYPE:
+        if capex_id == id:
+            pick_type = pt
+    if(not pick_type):
+        raise ValueError(f"No PickType found for ID: {id}")
+
+    refreshed_date = datetime.datetime.strptime(td['refreshed'], '%Y-%m-%dT%H:%M:%S.%fZ')
+    refreshed_date = refreshed_date.replace(tzinfo=datetime.timezone.utc)
 
     res[ftypes.SpecialColumns.DCapexName.get_col_name()] = fn
     res[ftypes.SpecialColumns.DRefreshedDate.get_col_name()]= refreshed_date
@@ -150,8 +184,8 @@ def read_capex_to_dir(browser : scraper_util.Browser, dir):
 
     #TODO 2 check that necessary tables are all there. Also check on load from cache
 
-    for index,td in enumerate(table_data_json):
-        open(os.path.join(dir,f"capex_data_{index}.json"),"wb").write(td)
+    for index,(key,td) in enumerate(table_data_json):
+        open(os.path.join(dir,f"capex_data_{index}_{key}.json"),"wb").write(td)
 
 
 if __name__ == '__main__':
@@ -177,8 +211,8 @@ if __name__ == '__main__':
             for index,ih in enumerate(infogram_htmls):
                 open(f"out_ih_{index}.html","wb").write(ih)
 
-            for index,td in enumerate(table_data_json):
-                open(f"out_table_data_{index}.json","wb").write(td)
+            for index,(key,td) in enumerate(table_data_json):
+                open(f"out_table_data_{key}.json","wb").write(td)
     else:
         table_data_json = [open(ih,"rb").read() for ih in config.table_data_files]
       

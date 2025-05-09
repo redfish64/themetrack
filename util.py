@@ -241,3 +241,26 @@ def read_data(ri_row_enum,*extra_constant_values):
 
     return (data_list,True,first_row_index)
 
+
+def extract_re_groups(regex_str, value_str):
+    """
+    Takes a regex string and a value string, returns a tuple of all matched groups.
+    Raises ValueError if there's no match.
+    
+    Args:
+        regex_str (str): The regular expression with capturing groups.
+        value_str (str): The string to match against.
+    
+    Returns:
+        tuple: All captured groups from the match.
+        
+    Raises:
+        ValueError: If the regex doesn't match the value string.
+    """
+    match = re.match(regex_str, value_str)
+    if not match:
+        raise ValueError(f"No match found for regex '{regex_str}' in string '{value_str}'")
+    return match.groups()
+
+def extract_subdir_date_from_filepath(fp):
+    return extract_re_groups(r".*/(.*?)/.*csv", fp)

@@ -173,5 +173,8 @@ IRR internal rate of return
 TWR time weighted return - divide into segments between each event, calculate gain/loss and multiply (1.00 + g)*(1.00 + g2)...
 MWR money weighted return - involves calculating the IRR, I think we could do this as well.
 
+---
 
+I did some tests with tmr, and it seems ok. It does change a lot if you have big price swings, but only if 
+dividends are also involved, since the price would dictate how much a dividend is worth.
 
