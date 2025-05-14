@@ -26,13 +26,12 @@ dr.register("numeric_headers",None,['Qty (Quantity)', 'Price', 'Price Chng % (Pr
                   'Mkt Val (Market Value)', 'Day Chng % (Day Change %)', 'Day Chng $ (Day Change $)', 'Cost Basis', 'Gain % (Gain/Loss %)',
                   'Gain $ (Gain/Loss $)', '% of Acct (% of Account)']
 )
-dr.register("numeric_headers","2025-05-07",['Qty (Quantity)', 'Price', 'Price Chng % (Price Change %)', 'Price Chng $ (Price Change $)',
-                  'Mkt Val (Market Value)', 'Day Chng % (Day Change %)', 'Day Chng $ (Day Change $)', 'Cost Basis', 'Gain % (Gain/Loss %)',
-                  'Gain $ (Gain/Loss $)', '% of Acct (% of Account)'])
-
+dr.register("numeric_headers","2025-05-07",['Qty (Quantity)', 'Price', 'Price Chng $ (Price Change $)', 'Price Chng % (Price Change %)', 
+                'Mkt Val (Market Value)', 'Day Chng $ (Day Change $)', 'Day Chng % (Day Change %)', 'Cost Basis', 'Gain $ (Gain/Loss $)', 
+                'Gain % (Gain/Loss %)', '% of Acct (% of Account)'])
 
 def parse_file_v1(fp : str):
-    subdir_datestr = extract_subdir_datestr_for_file(fp)
+    subdir_datestr = util.extract_subdir_date_from_filepath(fp)
 
     schwab_headers = dr.get("headers",subdir_datestr)
     schwab_numeric_headers = dr.get("numeric_headers",subdir_datestr)
@@ -73,7 +72,7 @@ def parse_file_v1(fp : str):
     res =  pd.DataFrame(all_rows,columns=headers)
 
     #schwab uses 'N/A' for some securities sometimes, so we replace it with None
-    res[schwab_headers] = res[schwab_numeric_headers].replace('N/A', None)
+    res[schwab_numeric_headers] = res[schwab_numeric_headers].replace('N/A', None)
     res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.Schwab.name
     res[ftypes.SpecialColumns.DRefreshedDate.get_col_name()] = datetime.date(int(yyyy),int(mm),int(dd))
 

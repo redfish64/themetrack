@@ -100,17 +100,22 @@ def read_capex_portfolio_html(opener):
         return(capex_html,infogram_html_list,table_data)
 
 
-def extract_index_and_id_from_filename(filename):
-    pattern = r'capex_data_(\d+)_([0-9a-f-]+)\.json'
+def extract_index_and_id_from_filepath(filename):
+    pattern = r'.*/capex_data_(\d+)_([0-9a-f-]+)\.json'
     match = re.match(pattern, filename)
     if match:
         return int(match.group(1)), match.group(2)
     raise ValueError("Invalid filename format")
 
 
-def convert_capex_portfolio_data_to_pandas(fn,td_json):
+def convert_capex_portfolio_data_to_pandas(fp,td_json):
+    subdir_datestr = util.extract_subdir_date_from_filepath(fp)
 
-    (index,id) = extract_index_and_id_from_filename(fn)
+    version = 0 if subdir_datestr < "2025-05-01" else 1 
+
+    if(version > 0):
+        (index,id) = extract_index_and_id_from_filepath(fp)
+    
 
     td = json.loads(td_json.decode())
     #convert data to pandas
@@ -159,16 +164,19 @@ def convert_capex_portfolio_data_to_pandas(fn,td_json):
 
     res =  pd.DataFrame(out_table)
 
-    for capex_id, pt in CAPEX_ID_TO_TYPE:
-        if capex_id == id:
-            pick_type = pt
-    if(not pick_type):
-        raise ValueError(f"No PickType found for ID: {id}")
+    if(version == 0):
+        fn = td['fileName']
+        pick_type = ftypes.CAPEX_FILENAME_TO_PICK_TYPE[fn].name
+        refreshed_date = datetime.datetime.fromtimestamp(int(td['refreshed'])/1000)
+    else:
+        for capex_id, pt in CAPEX_ID_TO_TYPE:
+            if capex_id == id:
+                pick_type = pt.name
+        if(not pick_type):
+            raise ValueError(f"No PickType found for ID: {id}")
 
-    refreshed_date = datetime.datetime.strptime(td['refreshed'], '%Y-%m-%dT%H:%M:%S.%fZ')
-    refreshed_date = refreshed_date.replace(tzinfo=datetime.timezone.utc)
+        refreshed_date = datetime.datetime.strptime(td['refreshed'], '%Y-%m-%dT%H:%M:%S.%fZ')
 
-    res[ftypes.SpecialColumns.DCapexName.get_col_name()] = fn
     res[ftypes.SpecialColumns.DRefreshedDate.get_col_name()]= refreshed_date
     res[ftypes.SpecialColumns.RPickType.get_col_name()]= pick_type
 

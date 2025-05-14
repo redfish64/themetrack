@@ -263,4 +263,4 @@ def extract_re_groups(regex_str, value_str):
     return match.groups()
 
 def extract_subdir_date_from_filepath(fp):
-    return extract_re_groups(r".*/(.*?)/.*csv", fp)
+    return extract_re_groups(r".*/(.*?)/.*(?:csv|json)", fp)[0]

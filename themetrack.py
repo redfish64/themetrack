@@ -335,7 +335,7 @@ def create_reports(args):
         if os.path.isfile(item_path):
             if is_capex_json(item):
                 table_json_data = open(item_path,"rb").read()
-                df = capex_scraper.convert_capex_portfolio_data_to_pandas(item, table_json_data)
+                df = capex_scraper.convert_capex_portfolio_data_to_pandas(item_path, table_json_data)
                 picks_df = pd.concat([picks_df,df],ignore_index=True)
             elif is_ib_holding_activity_csv(item):
                 ib_df = ib_parser.parse_holding_activity(item_path)

@@ -86,7 +86,6 @@ class SpecialColumns(Enum):
     DDiviPickTypeShortDesc = auto(),
     DJoinAllBitMask = auto(),
     DRefreshedDate = auto(),
-    DCapexName = auto(),
     DAcctName = auto(),
     RPickType = auto(),
     RPickPriority = auto(),

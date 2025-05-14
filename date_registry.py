@@ -21,8 +21,8 @@ class DateRegistry:
             start: Start date in 'YYYY-MM-DD' format. If None defaults to "1970-01-01"
             obj: The object to register (can be anything).
         """
-        if(start_dt is None):
-            start_dt = "1970-01-01"
+        if(start is None):
+            start = "1970-01-01"
         start_dt = datetime.strptime(start, "%Y-%m-%d")
         self._registry.setdefault(name, []).append((start_dt, obj))
         self._registry[name].sort(reverse=True)
