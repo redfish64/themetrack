@@ -266,3 +266,30 @@ This way, if you want to keep using an old version of a config with your special
 at any time. Also, old date directories can still be read by the new code.
 
 ---
+
+I think that for my purposes, simply being able to compare to the previous directory of data should be good 
+enough. I worry about using a stock lookup service such as yahoo finance due to stock splits.
+
+
+We will have to track shares, though. So if shares move unexpectedly we can error out and give an
+opportunity to make a manual event.
+
+I think also we should assume one event per stock per day.
+
+Then we add these sheets to the report:
+Events - This will have at most one entry per day per stock. It shows the value change in dollars and quantity
+Events Data - This shows all the events read that entered into the events on the Events tab. Since we're
+   assuming one event per stock per day, we don't need an id #, simply use date/stock to reference.
+
+We also have a third config sheet. This will allow overrides of events. It will simply replace any
+events that the program came up with (or add a new one if there are no events). To delete an event
+the user can just make the value change zero.
+
+----
+
+yfinance takes care of dividends and splits when reporting history, so I think that is good enough. No need to read
+in past events, then. It also has self caching.
+
+The only thing now is that we have to create a field for the yfinance symbol, and use that to find the historical performance.
+
+If we can't find the yfinance symbol, we'll error out, and the user can just create a custom rule for a particular stock

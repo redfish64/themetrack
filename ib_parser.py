@@ -47,6 +47,10 @@ def generic_parse(file):
         SubTotal = auto()
         Total = auto()
         Notes = auto()
+        MetaInfo = auto()
+
+    class IBTableName(Enum):
+        Disclosure = auto()
 
     tables = {}
 
@@ -62,7 +66,9 @@ def generic_parse(file):
             table_name = row[0]
             row_type = row[1]
             
-            if(row_type == IBRowType.Header.name):
+            if(table_name == IBTableName.Disclosure.name):
+                pass
+            elif(row_type == IBRowType.Header.name):
                 fields = row[2:]
                 t = Table(table_name,fields)
 
@@ -89,6 +95,8 @@ def generic_parse(file):
             elif(row_type == IBRowType.Total.name):
                 pass
             elif(row_type == IBRowType.Notes.name):
+                pass
+            elif(row_type == IBRowType.MetaInfo.name):
                 pass
             elif(row_type == ''):
                 pass
