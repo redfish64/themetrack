@@ -66,11 +66,14 @@ CAPEX_FILENAME_TO_PICK_TYPE= {
     "Divi Portfolio" : PickType.CapexDiviPortfolio,
 }
 
-SYSTEM_RULES_FILENAME="system_rules.xlsx"
-
 class BrokerageTypes(Enum):
     InteractiveBrokers = auto(),
     Schwab = auto(),
+
+class DataTypes(Enum):
+    Pick = auto(),
+    Holding = auto(),
+    Event = auto(),
 
 class SCType(Enum):
     Data = auto(),
@@ -87,9 +90,9 @@ class SpecialColumns(Enum):
     DJoinAllBitMask = auto(),
     DRefreshedDate = auto(),
     DAcctName = auto(),
+    DDataType = auto(),
     RPickType = auto(),
     RPickPriority = auto(),
-    RMatchColumns = auto(),
     RCurrValueCurrency = auto(),
     RCurrValueForeign = auto(),
     RCurrValue = auto(),
@@ -100,6 +103,7 @@ class SpecialColumns(Enum):
     RCatPerc = auto(),
     RTotalPerc = auto(),
     RCatTotalPerc = auto(),
+    CMatchColumns = auto(),
 
     def get_col_name(self):
         
@@ -125,7 +129,7 @@ SpecialColumns.The result of matching holdings to picks:
     None - holding matches no picks
 """,
                 SpecialColumns.DJoinAll: "If the JoinResult is many, a comma separated list of picks that were matched",
-                SpecialColumns.RMatchColumns: """
+                SpecialColumns.CMatchColumns: """
 This field determines how the holdings and picks are joined. It is a comma separated list of holdings to a 
 comma separated list of picks, ex. "Region,Ticker=Region,Ticker"
 """,

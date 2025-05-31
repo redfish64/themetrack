@@ -101,11 +101,11 @@ def read_capex_portfolio_html(opener):
 
 
 def extract_index_and_id_from_filepath(filename):
-    pattern = r'.*/capex_data_(\d+)_([0-9a-f-]+)\.json'
+    pattern = r'.*/capex_data_(\d+)_([0-9a-f-]+|None)\.json'
     match = re.match(pattern, filename)
-    if match:
-        return int(match.group(1)), match.group(2)
-    raise ValueError("Invalid filename format")
+    if not match:
+        raise ValueError("Invalid filename format")
+    return int(match.group(1)), match.group(2)
 
 
 def convert_capex_portfolio_data_to_pandas(fp,td_json):
@@ -116,6 +116,8 @@ def convert_capex_portfolio_data_to_pandas(fp,td_json):
     if(version > 0):
         (index,id) = extract_index_and_id_from_filepath(fp)
     
+    if(id == "None"):
+        return None
 
     td = json.loads(td_json.decode())
     #convert data to pandas

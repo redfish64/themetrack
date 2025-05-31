@@ -7,6 +7,7 @@ import ftypes
 
 OPTIONS_SHEETNAME = 'Options'
 CUSTOM_RULES_SHEETNAME = 'Custom Rules'
+SYSTEM_RULES_SHEETNAME = 'System Rules'
 
 
 def trim_cols(data,end_col,start_col=0):
@@ -164,11 +165,11 @@ def parse_options(options_csv_iter):
 
 def parse_config_file(fp):
     wb = op.load_workbook(fp)
-    custom_rules = util.read_standardized_csv(wb=wb,worksheet_name=CUSTOM_RULES_SHEETNAME)
-    custom_rules = rules_parser.parse_override_file(custom_rules,True)
+    system_rules = rules_parser.parse_override_file(util.read_standardized_csv(wb=wb,worksheet_name=SYSTEM_RULES_SHEETNAME), False)
+    custom_rules = rules_parser.parse_override_file(util.read_standardized_csv(wb=wb,worksheet_name=CUSTOM_RULES_SHEETNAME), True)
 
     options_csv_iter = util.read_standardized_csv(wb=wb,worksheet_name=OPTIONS_SHEETNAME)
 
     config = parse_options(options_csv_iter)
 
-    return config,custom_rules    
+    return config,custom_rules,system_rules    

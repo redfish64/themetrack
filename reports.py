@@ -15,17 +15,30 @@ JOINED_DATA_WS_TITLE = 'Joined Data'
 NA_STR_NAME = '(none)'
 
 header_font = Font(bold=True, italic=True)
+normal_line_font = Font()
 total_line_font = Font(bold=True)
 
-def style_simple_report_ws(ws):
+def style_simple_report_ws(ws, num_lines):
     #Make header stylish
     for cell in ws[1]:
         cell.font = header_font
+
+    #if we don't set to anything, will default black color, which is not readable in dark mode in libreoffice
+    for row_idx in range(2,num_lines+2):
+        for cell in ws[row_idx]:
+            cell.font = normal_line_font
+
 
 def style_report_ws(ws, num_lines):
     #Make header stylish
     for cell in ws[1]:
         cell.font = header_font
+
+    #if we don't set to anything, will default black color, which is not readable in dark mode in libreoffice
+    for row_idx in range(2,num_lines+1):
+        for cell in ws[row_idx]:
+            cell.font = normal_line_font
+
     #Make last line (the total) stylish
     for cell in ws[num_lines+1]:
         cell.font = total_line_font
@@ -185,7 +198,7 @@ def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFra
         def add_df(res_df, title, writer):
             res_df.to_excel(writer, index=False, sheet_name=title)
             ws = writer.sheets[title]
-            style_simple_report_ws(ws)
+            style_simple_report_ws(ws,res_df.shape[0])
 
         add_df(holdings_df, HOLDINGS_WS_TITLE, writer)
         add_df(picks_df, PICK_WS_TITLE, writer)

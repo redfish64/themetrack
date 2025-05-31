@@ -159,7 +159,7 @@ class OverrideRule:
         return altered_columns
     
 def parse_match_columns(s : str):
-    m = re.match(r'([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))\s*=\s*([A-Za-z0-9: ]+(?:,[A-Za-z0-9: ]+))$',s)
+    m = re.match(r'([A-Za-z0-9:]+(?:,[A-Za-z0-9:]+)*)=([A-Za-z0-9:]+(?:,[A-Za-z0-9:]+)*)$',s)
     if(m is None):
         return None
     holding_columns_str,pick_columns_str = m.groups()
@@ -170,7 +170,7 @@ def parse_override_file(fi,is_user_rules) -> list[OverrideRule]:
     """parses a file containing rules to match and replace data values
 
     Args:
-        fi: array of values, usually processed in the format returned by util.read_standardized_csv
+        fi: sequence of values, usually processed in the format returned by util.read_standardized_csv
 
     Returns:
         parsed rules
@@ -205,7 +205,7 @@ def parse_override_file(fi,is_user_rules) -> list[OverrideRule]:
         if(match_name == '*'):
             match_name = ''
 
-        if(repl_name == ftypes.SpecialColumns.RMatchColumns.get_col_name()):
+        if(repl_name == ftypes.SpecialColumns.CMatchColumns.get_col_name()):
             if(parse_match_columns(repl_value) is None):
                 util.csv_error(row,ri,3,"MatchColumn values must be in the format "
                                "'[holding_column1],[holding_column2],...=[pick_column1],[pick_column2]...', Ex. 'Region,Ticker=Region,Ticker'")

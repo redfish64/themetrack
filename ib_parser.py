@@ -33,7 +33,11 @@ class Table():
 
         d = dict(zip(self.fields,columns))
 
-        return pd.DataFrame(d)
+        res = pd.DataFrame(d)
+
+        res['D:TableType'] = self.name
+
+        return res
 
 
 def generic_parse(file):
@@ -93,7 +97,7 @@ def generic_parse(file):
 
     return tables
 
-def parse_holding_activity(file):
+def parse_holding_activity_and_trades(file):
     def join_dataframes(df1, df2, key, how='inner'):
         # Check for duplicates in both dataframes
         if df1[key].duplicated().any() or df2[key].duplicated().any():
@@ -102,28 +106,49 @@ def parse_holding_activity(file):
         # Perform the join
         return pd.merge(df1, df2, on=key, how=how)
 
-    def create_dataframe_from_tables(tables_dict,table_name):
+    def create_dataframe_from_tables(tables_dict,table_name,required=True):
+        if(not required and table_name not in tables_dict):
+            return pd.DataFrame()
         tables_list = tables_dict[table_name]
         return pd.concat([x.create_dataframe() for x in tables_list])
+    
+    def remove_totals_in_data(df):
+        if('Currency' in df):
+            return df[~df['Currency'].str.startswith('Total')]
+        return df
 
+    #co: can be done in config
+    # def break_out_stock_and_isin(df, column_name):
+    #     df['Symbol'] = df[column_name].str.extract(r'^([^\(]+)\(')
+    #     df['ISIN'] = df[column_name].str.extract(r'\(([^\)]+)\)')
 
     tables = generic_parse(file)
 
     op = create_dataframe_from_tables(tables,'Open Positions')
     fii = create_dataframe_from_tables(tables,'Financial Instrument Information')
+    trades = create_dataframe_from_tables(tables,'Trades')
+    dividends = remove_totals_in_data(create_dataframe_from_tables(tables,'Dividends',required=False)) # this is dividends before tax
+    witholding_tax = remove_totals_in_data(create_dataframe_from_tables(tables,'Withholding Tax',required=False))
+    fees = create_dataframe_from_tables(tables,'Fees',required=False)
+
+    corp_act = create_dataframe_from_tables(tables,'Corporate Actions',required=False)
     fii.rename(columns={'Code':'FFICode'},inplace=True)
 
     #join open positions and ffi so we get more information on each stock owned
-    res = pd.merge(op, fii, on=['Asset Category','Symbol'], how='inner',validate='1:1')
+    holdings_res = pd.merge(op, fii, on=['Asset Category','Symbol'], how='inner',validate='1:1')
+    holdings_res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
 
-    res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
+    #join dividends, witholding_tax, and fees
+    events_res = pd.concat([trades,dividends,witholding_tax,fees],ignore_index=True)
+    events_res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
+
 
     file_attrs = tables['Statement'][0].rows
 
     for name,val in file_attrs:
-        res[name] = val
+        holdings_res[name] = val
 
-    return res
+    return holdings_res,events_res
 
 if __name__ == '__main__':
 
@@ -137,9 +162,10 @@ if __name__ == '__main__':
 
     conf = parser.parse_args()
 
-    res = parse_holding_activity(conf.file)
+    holdings_res,events_res = parse_holding_activity_and_trades(conf.file)
 
-    print(res.to_csv())
+    print(holdings_res.to_csv())
+    print(events_res.to_csv())
 
 
 

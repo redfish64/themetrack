@@ -45,14 +45,30 @@ def get_template_path(template_name):
 #TODO 2.5 for the following, don't use the name to match, but look at the file contents.
 #Otherwise the user has to rename which may be confusing to them.
 
+def re_matches(target, *patterns):
+    for pattern in patterns:
+        if re.match(pattern, target):
+            return True
+    return False
+
 def is_capex_json(filename : str):
     return re.match(r"^capex.*\.json$",filename.lower()) is not None
 
-def is_ib_holding_activity_csv(filename : str):
-    return re.match(r"^holdings_ib.*\.(?:csv|xlsx)$",filename.lower()) is not None
+def is_ib_activity_report_csv(filename : str):
+    return re_matches(filename, 
+                      r"^U\d{7}[0-9_]+\.(?:csv|xlsx)$",
+                      r"^holdings_ib.*\.(?:csv|xlsx)$")
 
-def is_schwab_csv(filename : str):
-    return re.match(r"^holdings_schwab.*\.(?:csv|xlsx)$",filename.lower()) is not None
+def is_schwab_holdings_csv(filename : str):
+    return re_matches(filename, 
+                      r"^All-Accounts-Positions-.*\.(?:csv|xlsx)$",
+                      r"^holdings_schwab.*\.(?:csv|xlsx)$")
+                      
+def is_schwab_events_csv(filename : str):
+    return re_matches(filename, 
+                      r"^Individual_XXX\d+_Tranasctions.*\.(?:csv|xlsx)$",
+                      r"^events_schwab.*\.(?:csv|xlsx)$")
+                      
 
 def is_system_overrides_file(filename : str):
     return re.match(r"^system_overrides.*\.(?:csv|xlsx)$",filename.lower()) is not None
@@ -94,7 +110,7 @@ def join_holdings_and_picks(holdings_df : pd.DataFrame, picks_df : pd.DataFrame)
     # that have the same MatchColumns value
     for hi,h in holdings_df.iterrows():
         #this should never be None because it was checked when the file was parsed
-        h_mc,p_mc = rules_parser.parse_match_columns(h[ftypes.SpecialColumns.RMatchColumns.get_col_name()])
+        h_mc,p_mc = rules_parser.parse_match_columns(h[ftypes.SpecialColumns.CMatchColumns.get_col_name()])
 
         #match against the picks
                 
@@ -320,11 +336,9 @@ def create_reports(args):
 
     picks_df = pd.DataFrame()
     holdings_df = pd.DataFrame()
+    events_df = pd.DataFrame()
 
-    fi = util.read_standardized_csv(os.path.join(util.get_installation_directory(),ftypes.SYSTEM_RULES_FILENAME))
-    system_overrides = rules_parser.parse_override_file(fi,False)
-
-    user_overrides = []
+    user_rules = []
     config_file = None
 
     data_dir_files = os.listdir(sub_dir)
@@ -336,19 +350,25 @@ def create_reports(args):
             if is_capex_json(item):
                 table_json_data = open(item_path,"rb").read()
                 df = capex_scraper.convert_capex_portfolio_data_to_pandas(item_path, table_json_data)
-                picks_df = pd.concat([picks_df,df],ignore_index=True)
-            elif is_ib_holding_activity_csv(item):
-                ib_df = ib_parser.parse_holding_activity(item_path)
+                if(df is not None):
+                    picks_df = pd.concat([picks_df,df],ignore_index=True)
+            elif is_ib_activity_report_csv(item):
+                (ib_df,ib_trades) = ib_parser.parse_holding_activity_and_trades(item_path)
 
                 holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
-            elif is_schwab_csv(item):
+                events_df = pd.concat([events_df,ib_trades],ignore_index=True)
+            elif is_schwab_holdings_csv(item):
                 schwab_df = schwab_parser.parse_file(item_path)
 
                 holdings_df = pd.concat([holdings_df,schwab_df],ignore_index=True)
+            elif is_schwab_events_csv(item):
+                schwab_df = schwab_parser.parse_file(item_path)
+
+                events_df = pd.concat([events_df,schwab_df],ignore_index=True)
             elif is_config_file(item):
                 if(config_file is not None):
                     util.error(f"There can only be one config file, got {item_path} and {config_file}")
-                config,user_overrides = config_parser.parse_config_file(item_path)
+                config,user_rules,system_rules = config_parser.parse_config_file(item_path)
                 config_file = item_path
             else:
                 util.warn(f"skipping file {item_path}, don't know how to handle")
@@ -359,6 +379,10 @@ def create_reports(args):
         util.error(f"Capex files have not been downloaded, please run (cmd) {DOWNLOAD_CAPEX_COMMAND}")
     if(holdings_df.empty):
         util.error("There are no brokerage reports that could be processed. Please download them and put them in {sub_dir}")
+
+    holdings_df[ftypes.SpecialColumns.DDataType.get_col_name()] = ftypes.DataTypes.Holding.name
+    picks_df[ftypes.SpecialColumns.DDataType.get_col_name()] = ftypes.DataTypes.Pick.name
+    events_df[ftypes.SpecialColumns.DDataType.get_col_name()] = ftypes.DataTypes.Event.name
 
     if(config_file is None):
         util.error(f'There is no {ftypes.THEME_TRACK_CONFIG_FILE} in {sub_dir}. Please run (cmd) {CREATE_SNAPSHOT_COMMAND}')
@@ -371,15 +395,18 @@ def create_reports(args):
         rules_log = al.Log(None,turn_off=True)
 
     with al.add_log_context(rules_log,{"df": "holdings"}):
-        holdings_df = rules_parser.run_rules(system_overrides,user_overrides,holdings_df,rules_log)
+        holdings_df = rules_parser.run_rules(system_rules,user_rules,holdings_df,rules_log)
     with al.add_log_context(rules_log,{"df": "picks"}):
-        picks_df = rules_parser.run_rules(system_overrides,user_overrides,picks_df,rules_log)
+        picks_df = rules_parser.run_rules(system_rules,user_rules,picks_df,rules_log)
+    with al.add_log_context(rules_log,{"df": "events"}):
+        events_df = rules_parser.run_rules(system_rules,user_rules,events_df,rules_log)
 
     #co: PERF: if we have 1000's of rules this may be faster, don't know. Not well tested!
     # all_rules = system_overrides+user_overrides
     # forl = rules_parser.create_forl(all_rules)
     # holdings_df = rules_parser.run_rules_alt_method(all_rules,forl,holdings_df,rules_log)
     # picks_df = rules_parser.run_rules_alt_method(all_rules,forl,picks_df,rules_log)
+    # events_df = rules_parser.run_rules_alt_method(all_rules,forl,events_df,rules_log)
 
     res_pd = join_holdings_and_picks(holdings_df,picks_df)
 

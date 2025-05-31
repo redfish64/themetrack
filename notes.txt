@@ -178,3 +178,91 @@ MWR money weighted return - involves calculating the IRR, I think we could do th
 I did some tests with tmr, and it seems ok. It does change a lot if you have big price swings, but only if 
 dividends are also involved, since the price would dictate how much a dividend is worth.
 
+---
+
+so we have the main logic, which has a holdings and a pick file and then joins them together to create 
+a result for printing out the spreadsheet.
+
+What our goal is, is to display some sort of performance metrics. So to do this, we need to understand
+dividends, warrants, mergers, and spinoffs, and other corporate actions.
+
+The main logic, with the rules that change fields and so on can be isolated, I think. We don't need to
+touch it. The reason being is that when we join the transactions to the investments themselves, 
+this is a separate join that is not affected by anything else and is brokerage specific. The rules
+that we have now, are for creating new fields, such as "R:Ticker" for merging with pick files, which
+is completely separate from joining transactions to investments.
+
+What we ultimately want to display is some sort of performance metrics. There are a lot of different choices,
+but to begin with, we'll want something like %gain since last quarter, last 6 months, last year, per investment
+and then per pick category.
+
+--
+
+I think maybe we can have a sheet per category, or maybe even a sheet per stock. This will list all the dividends
+all the value estimations (derived by the holding reports from brokerages) and show the percent gain/loss.
+
+Regardless if a sheet is for a category or a stock, we treat it the same.
+
+Dividends/Corp actions resulting in an instrument such as a warrant that is not part of the category (or stock itself) will 
+be treated the same as sales.
+
+Mergers will be like a sale and buy of another stock
+
+---
+
+There can only be 255 tabs in a worksheet, so I think we have a single tab for categories and a single tab for stocks
+
+When there is an issue, such as this: 
+"10/01/2024","Stock Merger","CHK","CHESAPEAKE ENERGY CORP CLASS EQUITY","1,242","","",""
+"10/01/2024","Stock Merger","845467109","SOUTHWESTERN ENERGY CXXXMANDATORY MERGER EFF: 10/01/24","-14,331","","",""
+
+where we can't immediately determine what 845467109 links to, we create a new spreadsheet called addendums or something
+like that, it would be formatted something like this:
+
+Date,Transaction Identifier,Stock,Share Gain/Loss,Profit/Loss
+"10/01/2024","Type: Stock Merger;Symbol: 845467109;Desc:SOUTHWES...(cut for brevity)",???,???
+
+The user would then fill in the ??? columns and rerun. The code would then read addendums and use it to understand
+transactions that are not understandable.
+
+In the above case, if no addendum was added, and in this example, the code sees that one of the stocks that was present
+the previous date the code was run, but not present on the current date the code was run, it would do some sort of estimate
+and put a "*" in that column, indicating the profit/loss is an estimate only.
+
+---
+
+What we do is just the same as everything else for trades, we just use system rules to identify and setup the proper
+columns, and have custom rules for those one-off transactions that we can't programmactily understand.
+
+This provides the most flexibility. Otherwise, if we create dataclasses(aka. structs) of data, we'll be constantly
+having to update them.
+
+The only other thing is to add a D:Type of Pick/Holding/Event so that in the match file, it's a lot more clear
+what each match rule is for.
+
+We don't even have to worry about lines like this:
+"09/06/2024 as of 09/04/2024","ATM Withdrawal","","ATMBTB CATHY UNITED BA TAIPEI","","","","-$311.56"
+because we can use the spreadsheet rules to translate 09/06/2024 as of 09/04/2024 to 09/06/2024
+
+----
+
+so we take the input as events with dates.
+We're only going to handle dividends and trades first, but the events boil down to +/- items of value
+So each event has multiple items of value, and for TWR we find the change in the total value from before the event,
+then divide by the previous total value, so (curr total value) / (previous total value) * (previous TWR or 1 if none)
+
+So we start with the holdings value, and go backwards getting the data that we need. When we hit the previous
+holdings value, we compare the shares and make sure they are equal (we go backwards so we can start from somewhere
+and also incase we are missing event data from previous run). Then we get the TWR for the period of the events.
+The previous holdings value is only for making sure its right.
+
+---
+
+for configuration files. I think we should move back to a single configuration spreadsheet, with system rules 
+as a tab. Then we have a version number, and if people want to upgrade to the new version, they just update
+the version number in the config.
+
+This way, if you want to keep using an old version of a config with your special changes, you can, or upgrade
+at any time. Also, old date directories can still be read by the new code.
+
+---
