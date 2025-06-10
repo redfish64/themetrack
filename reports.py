@@ -113,6 +113,7 @@ def make_portfolio_reports(config : ftypes.Config, report_config : ftypes.Report
         res_df = category_df
         res_df.reset_index(names=[report_config.cat_column],inplace=True)
         res_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
+        #FIXME calc_performance_gains_for_cat(res_df, joined_df)
     else:
         category_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
         res_df = joined_df.copy()

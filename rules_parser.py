@@ -127,7 +127,6 @@ class OverrideRule:
         """_summary_
 
         Args:
-            is_user_rule (bool, optional): If true, the result of the rule cannot be changed by a non-user rule. Defaults to False.
             fixed_columns: columns that were set by a user rule, and so are fixed and cannot be changed by a system rule running afterwards
 
         Returns:
@@ -429,7 +428,7 @@ def create_forl(rules : list[OverrideRule]):
     return FastOverrideRulesList(rules)
 
 def run_rules_alt_method(rules : list[OverrideRule], forl : FastOverrideRulesList, df : pd.DataFrame, log : al.Log):
-    """Runs override rules against the data frame quickly
+    """Runs override rules against the data frame a different way
 
     Args:
         rules: rules to run
@@ -479,7 +478,7 @@ def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule]
     """Runs override rules against the data frame.
 
     Args:
-        system_rules (list[OverrideRule]): These are rules that are run for every dataset and basically are hardcoded. 
+        system_rules (list[OverrideRule]): These are rules that are meant to be setup by the developer (us).
           They are overrideable by user rules
         user_rules (list[OverrideRule]): These rules are for user exceptions, such as changing a ticker or an exchange to something that
           matches whats in Picks, etc. System rules will be run before and after all user rules. However system rules will never change
@@ -506,6 +505,12 @@ def run_rules(system_rules : list[OverrideRule], user_rules : list[OverrideRule]
             
             return any_rule_matched
 
+        #this rules the system rules first, then the user rules and then the system rules again.
+        #Each user rule has a flag so that if it changes a value of the row, the second time we 
+        #run the system rules, it will NOT write over it. So any rule added to user rules will
+        #override any rule added to system rules, but also any system rule that depends on a
+        #value changed by a user rule will use the user rule's value, and not any clashing
+        #system rule's value.
         with al.add_log_context(log, {"df_index" : row_orig.index}):
             with al.add_log_context(log, {"rule_set": "system_rules pass 1"}):
                 run_rules(system_rules,log, False)

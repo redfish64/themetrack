@@ -3,10 +3,14 @@ from functools import partial
 import logging
 import os
 from enum import Enum, auto
+from pathlib import PosixPath
 import re
 import openpyxl as op
 import pandas as pd
 import sys
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
 
 
 class ErrorType(Enum):
@@ -263,4 +267,37 @@ def extract_re_groups(regex_str, value_str):
     return match.groups()
 
 def extract_subdir_date_from_filepath(fp):
-    return extract_re_groups(r".*/(.*?)/.*(?:csv|json)", fp)[0]
+    if(isinstance(fp,PosixPath)):
+        return fp.name
+    return extract_re_groups(r".*/(.*?)/?$", fp)[0]
+
+
+def find_start_date_for_period(num, period, end_date):
+    """
+    Calculate start date based on number of periods before end_date.
+    
+    Args:
+        num (int): Number of periods
+        period (str): One of 'd' (days), 'wk' (weeks), 'mo' (months), 'y' (years)
+        end_date (str): End date in 'YYYY-MM-DD' format
+    
+    Returns:
+        str: Start date in 'YYYY-MM-DD' format
+    """
+    # Convert end_date string to datetime
+    end_date = datetime.strptime(end_date, '%Y-%m-%d')
+    
+    # Calculate start date based on period
+    if period == 'd':
+        start_date = end_date - relativedelta(days=num)
+    elif period == 'w':
+        start_date = end_date - relativedelta(weeks=num)
+    elif period == 'm':
+        start_date = end_date - relativedelta(months=num)
+    elif period == 'y':
+        start_date = end_date - relativedelta(years=num)
+    else:
+        raise ValueError("Period must be one of 'd', 'w', 'm', 'y'")
+    
+    # Return formatted start date
+    return start_date.strftime('%Y-%m-%d')

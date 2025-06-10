@@ -12,6 +12,8 @@ FINANCE_REPORTS_DIR = "reports"
 
 THEME_TRACK_CONFIG_FILE = 'theme_track_config.xlsx'
 
+YAHOO_FINANCE_CACHE_FILE = 'yahoo_finance_cache.json'
+
 FOREX_URL = 'https://www.ecb.europa.eu/stats/eurofxref/eurofxref.zip'
 FOREX_FILENAME = 'forex.zip'
 
@@ -104,6 +106,7 @@ class SpecialColumns(Enum):
     RTotalPerc = auto(),
     RCatTotalPerc = auto(),
     CMatchColumns = auto(),
+    CYahooTicker = auto(),
 
     def get_col_name(self):
         
@@ -190,3 +193,4 @@ class Config:
     currency : str
     reports : list[ReportConfig]
     currency_formats : dict[str,str] # currency to excel format
+    hist_perf_periods : list[str]

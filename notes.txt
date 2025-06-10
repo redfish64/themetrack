@@ -292,4 +292,28 @@ in past events, then. It also has self caching.
 
 The only thing now is that we have to create a field for the yfinance symbol, and use that to find the historical performance.
 
-If we can't find the yfinance symbol, we'll error out, and the user can just create a custom rule for a particular stock
+If we can't find the yfinance symbol, we'll error out, and the user can just create a custom rule for a particular stock.
+
+---
+
+As far as yahoo suffixes go. I think we keep these in the config file, even though it can't be updated for
+previous dates. Instead, we will create an additional step to download yahoo data before creating the reports.
+
+First, we should be doing this anyway, so that we don't bug yahoo servers too much.
+
+Second, suppose the yahoo tickers suffixes change, if we want to go back and run earlier reports, it's difficult
+to know what issues we might run into trying to get old data. It's also nearly purposeless. Why would we be doing this?
+
+---
+
+This is how we deal with config files that are date specific. When we add something, such as yahoo finance history 
+key C:YahooSuffix, we bump the version number of the config file. Then when we see the config file is of an earlier 
+version, we can automatically add rules, or warn the user about it.
+
+---
+
+Performance
+
+Right now we're using yahoo finance. This is an ok way of doing things, but I think using actual stock brokerage reports
+would be better, since it would be more accurate. However, the yahoo finance thing could work for a "pure" report, where
+we only report on a stock newsletter or strategy results from just how well it did, and not based on how we invested.

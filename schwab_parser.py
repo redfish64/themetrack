@@ -30,9 +30,7 @@ dr.register("numeric_headers","2025-05-07",['Qty (Quantity)', 'Price', 'Price Ch
                 'Mkt Val (Market Value)', 'Day Chng $ (Day Change $)', 'Day Chng % (Day Change %)', 'Cost Basis', 'Gain $ (Gain/Loss $)', 
                 'Gain % (Gain/Loss %)', '% of Acct (% of Account)'])
 
-def parse_file_v1(fp : str):
-    subdir_datestr = util.extract_subdir_date_from_filepath(fp)
-
+def parse_file_v1(fp : str, subdir_datestr : str):
     schwab_headers = dr.get("headers",subdir_datestr)
     schwab_numeric_headers = dr.get("numeric_headers",subdir_datestr)
 
@@ -80,8 +78,8 @@ def parse_file_v1(fp : str):
 
 dr.register("parse_file",None,parse_file_v1)
 
-def parse_file(fp):
-    return dr.run("parse_file",util.extract_subdir_date_from_filepath(fp), fp)
+def parse_file(fp,snapshot_date):
+    return dr.run("parse_file",snapshot_date, fp,snapshot_date)
 
 #TODO 2 show cash
 #TODO 2 show brokerage and allow user to specify fields of each report

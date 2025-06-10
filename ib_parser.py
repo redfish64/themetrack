@@ -105,7 +105,7 @@ def generic_parse(file):
 
     return tables
 
-def parse_holding_activity_and_trades(file):
+def parse_holding_activity(file):
     def join_dataframes(df1, df2, key, how='inner'):
         # Check for duplicates in both dataframes
         if df1[key].duplicated().any() or df2[key].duplicated().any():
@@ -134,29 +134,19 @@ def parse_holding_activity_and_trades(file):
 
     op = create_dataframe_from_tables(tables,'Open Positions')
     fii = create_dataframe_from_tables(tables,'Financial Instrument Information')
-    trades = create_dataframe_from_tables(tables,'Trades')
-    dividends = remove_totals_in_data(create_dataframe_from_tables(tables,'Dividends',required=False)) # this is dividends before tax
-    witholding_tax = remove_totals_in_data(create_dataframe_from_tables(tables,'Withholding Tax',required=False))
-    fees = create_dataframe_from_tables(tables,'Fees',required=False)
 
-    corp_act = create_dataframe_from_tables(tables,'Corporate Actions',required=False)
     fii.rename(columns={'Code':'FFICode'},inplace=True)
 
     #join open positions and ffi so we get more information on each stock owned
     holdings_res = pd.merge(op, fii, on=['Asset Category','Symbol'], how='inner',validate='1:1')
     holdings_res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
 
-    #join dividends, witholding_tax, and fees
-    events_res = pd.concat([trades,dividends,witholding_tax,fees],ignore_index=True)
-    events_res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.InteractiveBrokers.name
-
-
     file_attrs = tables['Statement'][0].rows
 
     for name,val in file_attrs:
         holdings_res[name] = val
 
-    return holdings_res,events_res
+    return holdings_res
 
 if __name__ == '__main__':
 
@@ -170,10 +160,9 @@ if __name__ == '__main__':
 
     conf = parser.parse_args()
 
-    holdings_res,events_res = parse_holding_activity_and_trades(conf.file)
+    holdings_res = parse_holding_activity(conf.file)
 
     print(holdings_res.to_csv())
-    print(events_res.to_csv())
 
 
 

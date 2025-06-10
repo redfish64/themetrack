@@ -9,6 +9,9 @@ import subprocess
 import sys
 
 import urllib
+
+import numpy
+import yahoo_stock_lookup
 import util
 import capex_scraper
 import ib_parser
@@ -23,6 +26,9 @@ import config_parser
 import array_log as al
 from currency_converter import CurrencyConverter
 import platform
+
+import history_stock_downloader
+import stock_performance_calc
 
 CREATE_SNAPSHOT_COMMAND = 'create-snapshot'
 CREATE_REPORTS_COMMAND = 'create-reports'
@@ -72,9 +78,6 @@ def is_schwab_events_csv(filename : str):
 
 def is_system_overrides_file(filename : str):
     return re.match(r"^system_overrides.*\.(?:csv|xlsx)$",filename.lower()) is not None
-
-def is_config_file(filename : str):
-    return filename == ftypes.THEME_TRACK_CONFIG_FILE
 
 def get_port_desc(rows,pick_types, pt_to_order_score):
     sorted_pick_types = sorted(pick_types,key=lambda pt: pt_to_order_score[pt])
@@ -328,15 +331,34 @@ def fill_in_forex(df, data_dir,config : ftypes.Config):
         return amt_to
 
     df[ftypes.SpecialColumns.RCurrValue.get_col_name()] = df.apply(update_native_currency,axis=1)
+    
 
+def calc_stock_history(cache_file,config,sub_dir_date,holdings_df):
+    if(not config.hist_perf_periods):
+        print("Historical performance periods not defined, not calculating performance")
+        return
 
+    min_start_date = sub_dir_date
+    for perf_period in config.hist_perf_periods:
+        num_periods = int(perf_period[:-1])
+        period_type = perf_period[-1]
 
-def create_reports(args):
-    sub_dir = get_sub_dir_from_config(args)
+        start_date = util.find_start_date_for_period(num_periods,period_type,sub_dir_date)
+        if(start_date < min_start_date):
+            min_start_date = start_date
+
+    symbols = holdings_df[holdings_df[ftypes.SpecialColumns.CYahooTicker.get_col_name()].notna()][ftypes.SpecialColumns.CYahooTicker.get_col_name()].tolist()
+
+    stock_hist_df = history_stock_downloader.download_stock_history(symbols,min_start_date,sub_dir_date,'1d',
+                                                                    cache_file,8)
+    
+    stock_performance_calc.calc_performance(holdings_df, stock_hist_df, sub_dir_date, config.hist_perf_periods)
+
+def build_result_df(sub_dir, snapshot_datestr, rules_log):
+    """"""
 
     picks_df = pd.DataFrame()
     holdings_df = pd.DataFrame()
-    events_df = pd.DataFrame()
 
     user_rules = []
     config_file = None
@@ -353,19 +375,14 @@ def create_reports(args):
                 if(df is not None):
                     picks_df = pd.concat([picks_df,df],ignore_index=True)
             elif is_ib_activity_report_csv(item):
-                (ib_df,ib_trades) = ib_parser.parse_holding_activity_and_trades(item_path)
+                ib_df = ib_parser.parse_holding_activity(item_path)
 
                 holdings_df = pd.concat([holdings_df,ib_df],ignore_index=True)
-                events_df = pd.concat([events_df,ib_trades],ignore_index=True)
             elif is_schwab_holdings_csv(item):
-                schwab_df = schwab_parser.parse_file(item_path)
+                schwab_df = schwab_parser.parse_file(item_path, snapshot_datestr)
 
                 holdings_df = pd.concat([holdings_df,schwab_df],ignore_index=True)
-            elif is_schwab_events_csv(item):
-                schwab_df = schwab_parser.parse_file(item_path)
-
-                events_df = pd.concat([events_df,schwab_df],ignore_index=True)
-            elif is_config_file(item):
+            elif item == ftypes.THEME_TRACK_CONFIG_FILE:
                 if(config_file is not None):
                     util.error(f"There can only be one config file, got {item_path} and {config_file}")
                 config,user_rules,system_rules = config_parser.parse_config_file(item_path)
@@ -382,24 +399,14 @@ def create_reports(args):
 
     holdings_df[ftypes.SpecialColumns.DDataType.get_col_name()] = ftypes.DataTypes.Holding.name
     picks_df[ftypes.SpecialColumns.DDataType.get_col_name()] = ftypes.DataTypes.Pick.name
-    events_df[ftypes.SpecialColumns.DDataType.get_col_name()] = ftypes.DataTypes.Event.name
 
     if(config_file is None):
         util.error(f'There is no {ftypes.THEME_TRACK_CONFIG_FILE} in {sub_dir}. Please run (cmd) {CREATE_SNAPSHOT_COMMAND}')
-
-    if(args.rules_log is not None):
-        holdings_id = int(args.rules_log)
-
-        rules_log = al.Log({"df": "holdings", "df_index" : holdings_id -1})
-    else:
-        rules_log = al.Log(None,turn_off=True)
 
     with al.add_log_context(rules_log,{"df": "holdings"}):
         holdings_df = rules_parser.run_rules(system_rules,user_rules,holdings_df,rules_log)
     with al.add_log_context(rules_log,{"df": "picks"}):
         picks_df = rules_parser.run_rules(system_rules,user_rules,picks_df,rules_log)
-    with al.add_log_context(rules_log,{"df": "events"}):
-        events_df = rules_parser.run_rules(system_rules,user_rules,events_df,rules_log)
 
     #co: PERF: if we have 1000's of rules this may be faster, don't know. Not well tested!
     # all_rules = system_overrides+user_overrides
@@ -407,6 +414,12 @@ def create_reports(args):
     # holdings_df = rules_parser.run_rules_alt_method(all_rules,forl,holdings_df,rules_log)
     # picks_df = rules_parser.run_rules_alt_method(all_rules,forl,picks_df,rules_log)
     # events_df = rules_parser.run_rules_alt_method(all_rules,forl,events_df,rules_log)
+
+    yahoo_tickers = holdings_df[ftypes.SpecialColumns.CYahooTicker.get_col_name()].tolist()
+
+    calc_stock_history(sub_dir / ftypes.YAHOO_FINANCE_CACHE_FILE,config,snapshot_datestr,holdings_df)
+
+
 
     res_pd = join_holdings_and_picks(holdings_df,picks_df)
 
@@ -418,11 +431,26 @@ def create_reports(args):
 
     res_pd = move_columns_to_front(res_pd,front_columns)
 
+
     # print(res_pd.to_csv())
     # print("-"*40)
     # # print(holdings_df.to_csv())
     # # print("-"*40)
     # print(picks_df.to_csv())
+
+    return config,picks_df,holdings_df,res_pd
+
+def create_reports(args):
+    sub_dir = get_sub_dir_from_config(args)
+    sub_dir_date = util.extract_subdir_date_from_filepath(sub_dir)
+
+    if(args.rules_log is not None):
+        log_holdings_id = int(args.rules_log)
+        rules_log = al.Log({"df": "holdings", "df_index" : log_holdings_id -1})
+    else:
+        rules_log = al.Log(None,turn_off=True)
+
+    config,picks_df,holdings_df,res_pd = build_result_df(sub_dir, sub_dir_date, rules_log)
 
     REPORT_OUT_FILE = "report_out.xlsx"
 
@@ -439,7 +467,6 @@ def create_reports(args):
         for msg,context in rules_log.get_logs():
             print(f"{context}: {msg}")
 
-    
 def setup_argparse():
     parser = argparse.ArgumentParser(
         description="joins holdings files with pick files for analysis in a spreadsheet",
