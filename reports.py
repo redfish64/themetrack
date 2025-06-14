@@ -8,6 +8,7 @@ import ftypes
 from openpyxl.styles import Font
 import array_log as al
 import util
+from typing import Sequence
 
 HOLDINGS_WS_TITLE = 'Holdings Input Data'
 PICK_WS_TITLE = 'Pick Input Data'
@@ -93,8 +94,47 @@ def update_number_formats(excel_formats,ws,num_rows,native_currency_code):
         ws.column_dimensions[col[0].column_letter].width = adjusted_width      
 
 
+def calc_performance_gains_for_cat(config, cat_column, res_df, joined_df):
+    for period in config.hist_perf_periods:
+        # ---- column names -----------------------------------------------------------
+        qty_col         = qty_col or ftypes.RQuantity.get_col_name()
+        start_price_col = start_price_col or f"{ftypes.ADJ_CLOSE_START_PRICE_PREFIX}{period}"
+        end_price_col   = end_price_col   or f"{ftypes.ADJ_CLOSE_END_PRICE_PREFIX}{period}"
+        perf_col        = f"{ftypes.GAIN_LOSS_PREFIX}{period}"                       # % perf
+        flag_col        = f"{ftypes.GAIN_LOSS_NOT_ALL_DATA_PRESENT_PREFIX}{period}"
 
-def make_portfolio_reports(config : ftypes.Config, report_config : ftypes.ReportConfig, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, 
+        required = [cat_column, qty_col, start_price_col, end_price_col]
+        missing_cols = [c for c in required if c not in joined_df.columns]
+        if missing_cols:
+            raise KeyError(f"joined_df is missing required columns: {missing_cols}")
+
+        # ---- completeness masks -----------------------------------------------------
+        complete_mask   = joined_df[[qty_col, start_price_col, end_price_col]].notna().all(axis=1)
+        incomplete_mask = ~complete_mask
+
+        # ---- per-row numbers --------------------------------------------------------
+        per_row_gain  = (joined_df[end_price_col] - joined_df[start_price_col]) * joined_df[qty_col]
+        per_row_gain  = per_row_gain.where(complete_mask, 0.0)                         # ignore bad rows
+
+        per_row_basis = joined_df[start_price_col] * joined_df[qty_col]               # initial value
+        per_row_basis = per_row_basis.where(complete_mask, 0.0)
+
+        # ---- aggregate to category level -------------------------------------------
+        cat_gain  = per_row_gain.groupby(joined_df[cat_column]).sum()
+        cat_basis = per_row_basis.groupby(joined_df[cat_column]).sum()
+
+        cat_pct_perf = ((cat_gain / cat_basis.replace(0, pd.NA))        # avoid /0 → inf
+                        .fillna(0.0))                            # percentage
+
+        cat_any_missing = incomplete_mask.groupby(joined_df[cat_column]).any()
+
+        # ---- write into res_df ------------------------------------------------------
+        res_df[perf_col] = res_df[cat_column].map(cat_pct_perf).fillna(0.0)            # % gain
+        res_df[flag_col] = res_df[cat_column].map(
+            lambda c: "*" if cat_any_missing.get(c, False) else ""
+        )
+
+def make_portfolio_report(config : ftypes.Config, report_config : ftypes.ReportConfig, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, 
                            picks_df : pd.DataFrame, native_currency_code : str
                           ):
 
@@ -113,7 +153,7 @@ def make_portfolio_reports(config : ftypes.Config, report_config : ftypes.Report
         res_df = category_df
         res_df.reset_index(names=[report_config.cat_column],inplace=True)
         res_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
-        #FIXME calc_performance_gains_for_cat(res_df, joined_df)
+        calc_performance_gains_for_cat(res_df, joined_df)
     else:
         category_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
         res_df = joined_df.copy()
@@ -187,9 +227,9 @@ def make_report_workbook(orig_joined_df : pd.DataFrame, holdings_df : pd.DataFra
     joined_df[ftypes.SpecialColumns.RTheme.get_col_name()] = joined_df[ftypes.SpecialColumns.RTheme.get_col_name()].fillna(NA_STR_NAME)
     joined_df[ftypes.SpecialColumns.RSector.get_col_name()] = joined_df[ftypes.SpecialColumns.RSector.get_col_name()].fillna(NA_STR_NAME)
 
-    #make_portfolio_reports returns a function here because debugging while within a "with pd.ExcelWriter..." is a pain,
+    #make_portfolio_report returns a function here because debugging while within a "with pd.ExcelWriter..." is a pain,
     #so we minimize the amount of code inside it
-    report_writer_fn_list = [make_portfolio_reports(config, report_config, joined_df,holdings_df,picks_df,native_currency_code) for report_config in config.reports]
+    report_writer_fn_list = [make_portfolio_report(config, report_config, joined_df,holdings_df,picks_df,native_currency_code) for report_config in config.reports]
     
     # Export to Excel
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:

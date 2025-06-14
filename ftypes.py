@@ -20,6 +20,12 @@ FOREX_FILENAME = 'forex.zip'
 WELCOME_BAT_FILE = r'dos_scripts\welcome.bat'
 WELCOME_BAT_ENV = 'IN_WELCOME_BAT'
 
+ADJ_CLOSE_START_PRICE_PREFIX = 'R:AdjCloseStartPrice'
+ADJ_CLOSE_END_PRICE_PREFIX = 'R:AdjCloseStartPrice'
+
+PRICE_START_DATE_PREFIX = 'R:PriceStartDate'
+PRICE_END_DATE_PREFIX = 'R:PriceEndDate'
+
 class PickType(Enum):
     CapexTotalPortfolio = auto(),
     CapexSkeletonPortfolio = auto(),
@@ -105,6 +111,7 @@ class SpecialColumns(Enum):
     RCatPerc = auto(),
     RTotalPerc = auto(),
     RCatTotalPerc = auto(),
+    RQuantity = auto(),
     CMatchColumns = auto(),
     CYahooTicker = auto(),
 
@@ -194,3 +201,4 @@ class Config:
     reports : list[ReportConfig]
     currency_formats : dict[str,str] # currency to excel format
     hist_perf_periods : list[str]
+    hist_perf_slip_days : int

@@ -106,10 +106,8 @@ def parse_currency_formats(fi):
 
     return res
 
-def parse_hist_perf_periods(periods_str):
-    # Check if input is a string and not empty
-    if not isinstance(periods_str, str) or not periods_str.strip():
-        raise ValueError("Input must be a non-empty string")
+def parse_hist_perf_periods(row,ri,ci):
+    periods_str = row[ci]
     
     # Split by semicolon and strip whitespace
     periods = [p.strip() for p in periods_str.split(';')]
@@ -125,18 +123,23 @@ def parse_hist_perf_periods(periods_str):
             
         # Check format: number followed by single letter (w, m, or y)
         if not period[:-1].isdigit() or period[-1].lower() not in valid_units:
-            raise ValueError(f"Invalid period format: '{period}'. Must be like '5w', '6m', or '3y'")
+            util.csv_error(row,ri,len(row),f"Invalid period format: '{period}'. Must be like '5w', '6m', or '3y'")
         
         # Add validated period to result
         result.append(period)
     
     # Check if we have any valid periods
     if not result:
-        raise ValueError("No valid periods found")
+        util.csv_error(row,ri,len(row),f"No valid periods found")
         
     return result
 
-    
+def parse_int(row,ri,ci) -> int:
+    try:
+        return int(row[ci])
+    except ValueError:
+        util.csv_error(row,ri,ci,f"Cannot convert '{row[ci]}' to integer")
+        
 def parse_options(options_csv_iter):
     fi = enumerate(util.extend_all_row_length(options_csv_iter,min_len=5))
 
@@ -156,14 +159,19 @@ def parse_options(options_csv_iter):
             case "ReportCurrency":
                 config.currency = row[1]
             case "HistoricalPerformancePeriods":
-                config.hist_perf_periods = parse_hist_perf_periods(row[1])
+                config.hist_perf_periods = parse_hist_perf_periods(row,ri,1)
             case "ThemeReport":
                 config.reports.append(parse_cat_report(fi))
             case "SecuritiesReport":
                 config.reports.append(parse_securities_report(fi))
             case "CurrencyFormat":
                 config.currency_formats = parse_currency_formats(fi)
+            case "HistoricalPerformanceSlippageDays":
+                config.hist_perf_slip_days = parse_int(row,ri,1)
+            case _:
+                util.csv_error(row,ri,len(row),f"No option named {row[0]}")
 
+                
     def assert_option_present(val,name):
         if(val is None):
             util.error(f"{name} is required in Options file")

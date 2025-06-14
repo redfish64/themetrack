@@ -28,7 +28,7 @@ from currency_converter import CurrencyConverter
 import platform
 
 import history_stock_downloader
-import stock_performance_calc
+import stock_perf_data
 
 CREATE_SNAPSHOT_COMMAND = 'create-snapshot'
 CREATE_REPORTS_COMMAND = 'create-reports'
@@ -333,26 +333,6 @@ def fill_in_forex(df, data_dir,config : ftypes.Config):
     df[ftypes.SpecialColumns.RCurrValue.get_col_name()] = df.apply(update_native_currency,axis=1)
     
 
-def calc_stock_history(cache_file,config,sub_dir_date,holdings_df):
-    if(not config.hist_perf_periods):
-        print("Historical performance periods not defined, not calculating performance")
-        return
-
-    min_start_date = sub_dir_date
-    for perf_period in config.hist_perf_periods:
-        num_periods = int(perf_period[:-1])
-        period_type = perf_period[-1]
-
-        start_date = util.find_start_date_for_period(num_periods,period_type,sub_dir_date)
-        if(start_date < min_start_date):
-            min_start_date = start_date
-
-    symbols = holdings_df[holdings_df[ftypes.SpecialColumns.CYahooTicker.get_col_name()].notna()][ftypes.SpecialColumns.CYahooTicker.get_col_name()].tolist()
-
-    stock_hist_df = history_stock_downloader.download_stock_history(symbols,min_start_date,sub_dir_date,'1d',
-                                                                    cache_file,8)
-    
-    stock_performance_calc.calc_performance(holdings_df, stock_hist_df, sub_dir_date, config.hist_perf_periods)
 
 def build_result_df(sub_dir, snapshot_datestr, rules_log):
     """"""
@@ -415,11 +395,7 @@ def build_result_df(sub_dir, snapshot_datestr, rules_log):
     # picks_df = rules_parser.run_rules_alt_method(all_rules,forl,picks_df,rules_log)
     # events_df = rules_parser.run_rules_alt_method(all_rules,forl,events_df,rules_log)
 
-    yahoo_tickers = holdings_df[ftypes.SpecialColumns.CYahooTicker.get_col_name()].tolist()
-
-    calc_stock_history(sub_dir / ftypes.YAHOO_FINANCE_CACHE_FILE,config,snapshot_datestr,holdings_df)
-
-
+    holdings_df = stock_perf_data.calc_stock_history(sub_dir / ftypes.YAHOO_FINANCE_CACHE_FILE,config,snapshot_datestr,holdings_df)
 
     res_pd = join_holdings_and_picks(holdings_df,picks_df)
 
