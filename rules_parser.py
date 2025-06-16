@@ -14,6 +14,8 @@ import re
 import pandas as pd
 import array_log as al
 
+NO_REGEX = '(.*)'
+
 class MatchCondition:
     def __init__(self,row_index : int,name,val_str) -> None:
         self.row_index = row_index
@@ -38,7 +40,12 @@ class ReMatchCondition:
         if(v is None):
             return (False,None)
         
-        m = re.match(self.val_re,v)
+        #sometimes the brokerage statement parsers will return numeric values. In that case,
+        #if the rule doesn't use a regex, we want to copy the value as is (and not convert it to a string first)
+        if(len(self.var_names) == 1 and self.val_re == NO_REGEX):
+            return (True,{self.var_names[0]: v})
+        
+        m = re.match(self.val_re,str(v))
         if(m):
             var_values = m.groups()
             return (True,dict(zip(self.var_names,var_values)))
@@ -63,7 +70,7 @@ def create_match_condition(ri : int, name,val_str : str):
     def replacement(match):
         regex = match.group(2)
         if(regex is None):
-            regex = ".*"
+            return NO_REGEX
         
         return f"({regex})"
         
@@ -115,10 +122,10 @@ class OverrideRule:
             with al.add_log_context(log,{"match_condition_row_index" : mc.row_index }):
                 (matches, match_var_subs) = mc.matches(row)
                 if(not matches):
-                    al.write_log(log,"matched.")
+                    al.write_log(log,"did not match.")
                     return (False, {})
                 
-                al.write_log(log,"did not match.")
+                al.write_log(log,"matched.")
                 var_subs.update(match_var_subs)
         
         return (True, var_subs)
@@ -144,7 +151,15 @@ class OverrideRule:
                     al.write_log(log,f"{r_name} was modified by a user_rule, skipping")
                     continue
 
-                updated_val = re.sub(r'\$\{(\w+)\}', replace_var_sub, r_value)
+                #check if the variable is used alone. If so, it may have a numeric value, so we can't use the normal processing
+                #using re.sub
+                m = re.match(r'^\${(\w+)\}$', r_value)
+                if m:
+                    key = m.group(1)
+                    updated_val = var_subs.get(key, r_value)
+                else:
+                    updated_val = re.sub(r'\$\{(\w+)\}', replace_var_sub, r_value)
+                    
                 old_value = row.get(r_name,None)
                 if(self.is_user_rule or r_name not in fixed_columns):
                     if(old_value != updated_val):

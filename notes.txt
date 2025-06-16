@@ -317,3 +317,4 @@ Performance
 Right now we're using yahoo finance. This is an ok way of doing things, but I think using actual stock brokerage reports
 would be better, since it would be more accurate. However, the yahoo finance thing could work for a "pure" report, where
 we only report on a stock newsletter or strategy results from just how well it did, and not based on how we invested.
+

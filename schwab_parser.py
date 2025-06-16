@@ -71,6 +71,9 @@ def parse_file_v1(fp : str, subdir_datestr : str):
 
     #schwab uses 'N/A' for some securities sometimes, so we replace it with None
     res[schwab_numeric_headers] = res[schwab_numeric_headers].replace('N/A', None)
+    for c in schwab_numeric_headers:
+        res[c] = res[c].str.replace('[^0-9.()-]', '',regex=True)
+        res[c] = pd.to_numeric(res[c], errors='raise')
     res[ftypes.SpecialColumns.DBrokerage.get_col_name()] = ftypes.BrokerageTypes.Schwab.name
     res[ftypes.SpecialColumns.DRefreshedDate.get_col_name()] = datetime.date(int(yyyy),int(mm),int(dd))
 

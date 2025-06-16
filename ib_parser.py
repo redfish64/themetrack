@@ -5,6 +5,12 @@ from util import error,warn,csv_assert,csv_error,csv_warning,ErrorType
 import pandas as pd
 import ftypes
 
+#columns that should be converted to floats.
+#This only covers data we use, because I don't want to update it all the time when the file changes
+NUMERIC_COLUMNS = {
+   'Open Positions': {'Quantity','Mult', 'Cost Price', 'Cost Basis', 'Close Price', 'Value', 'Unrealized P/L'}
+  }
+
 class Table():
     def __init__(self,name,fields) -> None:
         self.name = name
@@ -72,7 +78,6 @@ def generic_parse(file):
                 fields = row[2:]
                 t = Table(table_name,fields)
 
-                
                 if(table_name in tables):
                     #co: this is a common occurrence, no need to worry.
                     #csv_warning(row,row_index,0,"Table specified twice, both will be parsed")
@@ -86,9 +91,15 @@ def generic_parse(file):
                 table = tables[table_name][-1]
                 if(len(fields) < len(data)):
                     csv_warning(row,row_index,None,"Number of fields is less than number of data values, ignoring extras")
-                    while(len(data) < len(fields)):
-                        data.append('')
 
+                while(len(data) < len(fields)):
+                    data.append('')
+
+                if(table_name in NUMERIC_COLUMNS):
+                    numeric_cols = NUMERIC_COLUMNS[table_name]
+                    for i in range(0,len(fields)):
+                        if(fields[i] in numeric_cols):
+                            data[i] = float(data[i])
                 table.rows.append(data)
             elif(row_type == IBRowType.SubTotal.name):
                 pass

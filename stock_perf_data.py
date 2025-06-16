@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from dateutil.relativedelta import relativedelta
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,time
 
 import ftypes
 import util
@@ -30,6 +30,9 @@ def calculate_start_date(duration_str, end_date):
     
     return start_date
 
+def to_datetime(d):
+    return datetime.combine(d, time.min)
+
 
 def find_closest_date(index, target_date, max_days):
     """
@@ -43,8 +46,9 @@ def find_closest_date(index, target_date, max_days):
     Returns:
     - Closest date if within max_days, otherwise None.
     """
-    start = target_date - pd.Timedelta(days=max_days)
-    end = target_date + pd.Timedelta(days=max_days)
+    target_date = to_datetime(target_date)
+    start = to_datetime(target_date - pd.Timedelta(days=max_days))
+    end = to_datetime(target_date + pd.Timedelta(days=max_days))
     candidates = index[(index >= start) & (index <= end)]
     if candidates.empty:
         return None
@@ -74,7 +78,7 @@ def add_stock_perf_data_to_holdings_df(holdings_df, stock_hist_df, end_date, per
     res_df = pd.DataFrame()
 
     # Convert end_date to datetime
-    end_date = pd.to_datetime(end_date)
+    end_date = pd.to_datetime(end_date).date()
 
     # Iterate over unique symbols in holdings_df
     def update_holdings_row(row):
@@ -101,11 +105,13 @@ def add_stock_perf_data_to_holdings_df(holdings_df, stock_hist_df, end_date, per
                 adjclose_start_price = ts.loc[closest_start_date, 'adjclose']
                 adjclose_end_price = ts.loc[closest_end_date, 'adjclose']
 
-                row[f'R:AdjCloseStartPrice{period}'] = adjclose_start_price
-                row[f'R:AdjCloseEndPrice{period}'] = adjclose_end_price
+                row[f'{ftypes.ADJ_CLOSE_START_PRICE_PREFIX}{period}'] = adjclose_start_price
+                row[f'{ftypes.ADJ_CLOSE_END_PRICE_PREFIX}{period}'] = adjclose_end_price
 
-                row[f'R:PriceStartDate{period}'] = closest_start_date
-                row[f'R:PriceEndDate{period}'] = closest_end_date
+                row[f'{ftypes.PRICE_START_DATE_PREFIX}{period}'] = closest_start_date
+                row[f'{ftypes.PRICE_END_DATE_PREFIX}{period}'] = closest_end_date
+        
+        return row
 
     holdings_df = holdings_df.apply(update_holdings_row,axis=1)
 
@@ -132,7 +138,7 @@ def calc_stock_history(cache_file,config,sub_dir_date,holdings_df):
     symbols = list(set(holdings_df[holdings_df[ftypes.SpecialColumns.CYahooTicker.get_col_name()].notna()]
                          [ftypes.SpecialColumns.CYahooTicker.get_col_name()].tolist()))
 
-    stock_hist_df = history_stock_downloader.download_stock_history(symbols,min_start_date,sub_dir_date,'1w',
+    stock_hist_df = history_stock_downloader.download_stock_history(symbols,min_start_date,sub_dir_date,'1wk',
                                                                     cache_file,8)
     
-    return add_stock_perf_data_to_holdings_df(holdings_df, stock_hist_df, sub_dir_date, config.hist_perf_periods, config.max_slippage_days)
+    return add_stock_perf_data_to_holdings_df(holdings_df, stock_hist_df, sub_dir_date, config.hist_perf_periods, config.hist_perf_slip_days)

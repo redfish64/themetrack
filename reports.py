@@ -97,9 +97,9 @@ def update_number_formats(excel_formats,ws,num_rows,native_currency_code):
 def calc_performance_gains_for_cat(config, cat_column, res_df, joined_df):
     for period in config.hist_perf_periods:
         # ---- column names -----------------------------------------------------------
-        qty_col         = qty_col or ftypes.RQuantity.get_col_name()
-        start_price_col = start_price_col or f"{ftypes.ADJ_CLOSE_START_PRICE_PREFIX}{period}"
-        end_price_col   = end_price_col   or f"{ftypes.ADJ_CLOSE_END_PRICE_PREFIX}{period}"
+        qty_col         = ftypes.SpecialColumns.RQuantity.get_col_name()
+        start_price_col = f"{ftypes.ADJ_CLOSE_START_PRICE_PREFIX}{period}"
+        end_price_col   = f"{ftypes.ADJ_CLOSE_END_PRICE_PREFIX}{period}"
         perf_col        = f"{ftypes.GAIN_LOSS_PREFIX}{period}"                       # % perf
         flag_col        = f"{ftypes.GAIN_LOSS_NOT_ALL_DATA_PRESENT_PREFIX}{period}"
 
@@ -134,6 +134,17 @@ def calc_performance_gains_for_cat(config, cat_column, res_df, joined_df):
             lambda c: "*" if cat_any_missing.get(c, False) else ""
         )
 
+def calc_performance_gains_for_stocks(config, res_df):
+    for period in config.hist_perf_periods:
+        # ---- column names -----------------------------------------------------------
+        start_price_col = f"{ftypes.ADJ_CLOSE_START_PRICE_PREFIX}{period}"
+        end_price_col   = f"{ftypes.ADJ_CLOSE_END_PRICE_PREFIX}{period}"
+        perf_col        = f"{ftypes.GAIN_LOSS_PREFIX}{period}"                       # % perf
+
+        # ---- per-row numbers --------------------------------------------------------
+        res_df[perf_col] = (res_df[end_price_col] - res_df[start_price_col]) / res_df[start_price_col] - 1.0
+
+
 def make_portfolio_report(config : ftypes.Config, report_config : ftypes.ReportConfig, joined_df : pd.DataFrame, holdings_df : pd.DataFrame, 
                            picks_df : pd.DataFrame, native_currency_code : str
                           ):
@@ -153,7 +164,7 @@ def make_portfolio_report(config : ftypes.Config, report_config : ftypes.ReportC
         res_df = category_df
         res_df.reset_index(names=[report_config.cat_column],inplace=True)
         res_df[ftypes.SpecialColumns.RTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
-        calc_performance_gains_for_cat(res_df, joined_df)
+        calc_performance_gains_for_cat(config, report_config.cat_column, res_df, joined_df)
     else:
         category_df[ftypes.SpecialColumns.RCatTotalPerc.get_col_name()] = category_df.apply(get_total_perc,axis=1)
         res_df = joined_df.copy()
@@ -184,6 +195,7 @@ def make_portfolio_report(config : ftypes.Config, report_config : ftypes.ReportC
         #portfolio rows, since there are so many and its distracting. For divi, vic versa.
         res_df = res_df[res_df.apply(row_filter_fn(report_config.always_show_pick_bitmask),axis=1)]
 
+        calc_performance_gains_for_stocks(config, res_df)
 
         # TODO 2.5 reenable this, using a different column per report or something...
         # def get_cat_total_perc_for_df(row):

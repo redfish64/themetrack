@@ -1,3 +1,4 @@
+import itertools
 import re
 import openpyxl as op
 import util
@@ -147,7 +148,7 @@ def parse_options(options_csv_iter):
 
     util.verify_header(ri,header,["Options",'','','','','Notes'])
 
-    config = ftypes.Config(reports=[],currency=None,currency_formats=None,hist_perf_periods=[])
+    config = ftypes.Config(version=0.0,reports=[],currency=None,currency_formats=None,hist_perf_periods=[], hist_perf_slip_days=5)
 
     while(True):
         (ri,row) = util.skip_blank_lines(fi)
@@ -168,6 +169,8 @@ def parse_options(options_csv_iter):
                 config.currency_formats = parse_currency_formats(fi)
             case "HistoricalPerformanceSlippageDays":
                 config.hist_perf_slip_days = parse_int(row,ri,1)
+            case "ConfigVersion":
+                config.version = row[1]
             case _:
                 util.csv_error(row,ri,len(row),f"No option named {row[0]}")
 
@@ -181,21 +184,54 @@ def parse_options(options_csv_iter):
 
     def fix_special_vars_for_report(report : ftypes.ReportConfig):
 
-        def replace_var(match):
-            match match.group(1):
+        ALL_VARS_PATTERN = re.compile(r'\$\{([a-zA-Z0-9 _-]+)\}')
+        def get_var_values(name):
+            match name:
                 case "ReportCurrency":
-                    return config.currency
+                    # wrap scalar in list
+                    return [config.currency]
                 case "CurrencyFormat":
-                    return config.currency_formats[config.currency]
+                    return [config.currency_formats[config.currency]]
+                case "HistoricalPerformancePeriods":
+                    # already a list
+                    return config.hist_perf_periods
                 case x:
                     util.error(f"Cannot understand variable ${{{x}}} in Options")
 
-        def replace_vars(txt):
-            ALL_VARS_PATTERN = re.compile(r'\$\{([a-zA-Z0-9 _-]+)\}')
-            
-            return ALL_VARS_PATTERN.sub(replace_var, txt)
+        def replace_vars(templates: list[str]) -> list[list[str]]:
+            # 1) collect distinct var-names in order
+            var_names = []
+            for tpl in templates:
+                for name in ALL_VARS_PATTERN.findall(tpl):
+                    if name not in var_names:
+                        var_names.append(name)
+
+            # 2) build a map name -> list of string-values
+            var_values = {}
+            for name in var_names:
+                vals = get_var_values(name)
+                # ensure all entries are strings
+                var_values[name] = [str(v) for v in vals]
+
+            # 3) for each combination of values, do the substitutions
+            rows = []
+            for combo in itertools.product(*(var_values[name] for name in var_names)):
+                mapping = dict(zip(var_names, combo))
+                row = []
+                for tpl in templates:
+                    # replace each ${var} with the chosen mapping[var]
+                    row.append(
+                        ALL_VARS_PATTERN.sub(lambda m: mapping[m.group(1)], tpl)
+                    )
+                rows.append(row)
+
+            return rows
         
-        report.columns = [ (name,replace_vars(display_as),replace_vars(excel_format)) for name,display_as,excel_format in report.columns]
+        new_cols = []
+        for name,display_as,excel_format in report.columns:
+            new_cols = new_cols + replace_vars([name, display_as,excel_format])
+
+        report.columns = [ (name,display_as,excel_format) for name,display_as,excel_format in new_cols]
 
     for r in config.reports:
         fix_special_vars_for_report(r)

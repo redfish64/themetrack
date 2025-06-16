@@ -21,10 +21,15 @@ WELCOME_BAT_FILE = r'dos_scripts\welcome.bat'
 WELCOME_BAT_ENV = 'IN_WELCOME_BAT'
 
 ADJ_CLOSE_START_PRICE_PREFIX = 'R:AdjCloseStartPrice'
-ADJ_CLOSE_END_PRICE_PREFIX = 'R:AdjCloseStartPrice'
+ADJ_CLOSE_END_PRICE_PREFIX = 'R:AdjCloseEndPrice'
 
 PRICE_START_DATE_PREFIX = 'R:PriceStartDate'
 PRICE_END_DATE_PREFIX = 'R:PriceEndDate'
+
+GAIN_LOSS_PREFIX = 'R:GainLoss'
+
+GAIN_LOSS_NOT_ALL_DATA_PRESENT_PREFIX = 'R:GainLossNotAllPresent'
+
 
 class PickType(Enum):
     CapexTotalPortfolio = auto(),
@@ -197,6 +202,7 @@ class ReportConfig:
 
 @dataclass
 class Config:
+    version : str
     currency : str
     reports : list[ReportConfig]
     currency_formats : dict[str,str] # currency to excel format
